@@ -21,7 +21,6 @@ limitations under the License.
 #include "tensorflow/core/graph/subgraph.h"
 #include "tensorflow/core/platform/init_main.h"
 #include "tensorflow/core/public/session.h"
-#include "tensorflow/core/util/command_line_flags.h"
 #include "tensorflow/tools/graph_transforms/transform_utils.h"
 
 namespace tensorflow {
@@ -159,6 +158,9 @@ Status FuseScaleOffsetToConvWeights(const std::vector<float>& scale_values,
   NodeDef bias_add_node;
   bias_add_node.set_op("BiasAdd");
   bias_add_node.set_name(conv_output_name);
+  if (conv_node.attr().count("data_format") > 0) {
+    CopyNodeAttr(conv_node, "data_format", "data_format", &bias_add_node);
+  }
   CopyNodeAttr(conv_node, "T", "T", &bias_add_node);
   AddNodeInput(conv_node.name(), &bias_add_node);
   AddNodeInput(bias_offset_node.name(), &bias_add_node);

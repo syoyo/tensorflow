@@ -20,7 +20,9 @@ limitations under the License.
 #include "tensorflow/compiler/tf2xla/xla_helpers.h"
 #include "tensorflow/compiler/tf2xla/xla_op_kernel.h"
 #include "tensorflow/compiler/tf2xla/xla_op_registry.h"
-#include "tensorflow/compiler/xla/literal_util.h"
+#include "tensorflow/compiler/xla/client/xla_builder.h"
+#include "tensorflow/compiler/xla/client/xla_computation.h"
+#include "tensorflow/compiler/xla/literal.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/partial_tensor_shape.h"
 #include "tensorflow/core/framework/register_types.h"
@@ -37,8 +39,8 @@ namespace {
 
 // TODO(phawkins): implement double-sized windowed reductions in XLA and remove
 // the type constraint.
-constexpr std::array<DataType, 3> kScanOpTypes = {
-    {DT_HALF, DT_BFLOAT16, DT_FLOAT}};
+constexpr std::array<DataType, 4> kScanOpTypes = {
+    {DT_HALF, DT_BFLOAT16, DT_FLOAT, DT_INT32}};
 
 class ScanOp : public XlaOpKernel {
  public:
@@ -74,7 +76,7 @@ class ScanOp : public XlaOpKernel {
       return;
     }
 
-    xla::ComputationBuilder* builder = ctx->builder();
+    xla::XlaBuilder* builder = ctx->builder();
 
     std::vector<int64> window_strides(input_shape.dims(), 1);
     std::vector<int64> window_dims(input_shape.dims(), 1);
@@ -91,8 +93,8 @@ class ScanOp : public XlaOpKernel {
       std::swap(padding[axis].first, padding[axis].second);
     }
 
-    xla::ComputationDataHandle init;
-    const xla::Computation* reducer;
+    xla::XlaOp init;
+    const xla::XlaComputation* reducer;
     if (sum_) {
       init = XlaHelpers::Zero(builder, dtype);
       reducer = ctx->GetOrCreateAdd(dtype);
@@ -100,22 +102,22 @@ class ScanOp : public XlaOpKernel {
       init = XlaHelpers::One(builder, dtype);
       reducer = ctx->GetOrCreateMul(dtype);
     }
-    auto output = builder->ReduceWindowWithGeneralPadding(
-        XlaHelpers::ConvertElementType(builder, ctx->Input(0), dtype), init,
-        *reducer, window_dims, window_strides, padding);
-    output =
-        XlaHelpers::ConvertElementType(builder, output, ctx->input_type(0));
+    auto output = xla::ReduceWindowWithGeneralPadding(
+        XlaHelpers::ConvertElementType(ctx->Input(0), dtype), init, *reducer,
+        window_dims, window_strides,
+        /*base_dilations=*/{}, /*window_dilations=*/{}, padding);
+    output = XlaHelpers::ConvertElementType(output, ctx->input_type(0));
 
     // In exclusive mode, we have computed an extra element containing the sum
     // of all the input elements. Slice off this extra "last" element.
     if (exclusive_) {
       if (reverse_) {
-        output = builder->SliceInDim(output, 1, input_shape.dim_size(axis) + 1,
-                                     1, axis);
+        output =
+            xla::SliceInDim(output, 1, input_shape.dim_size(axis) + 1, 1, axis);
 
       } else {
         output =
-            builder->SliceInDim(output, 0, input_shape.dim_size(axis), 1, axis);
+            xla::SliceInDim(output, 0, input_shape.dim_size(axis), 1, axis);
       }
     }
     ctx->SetOutput(0, output);
@@ -133,7 +135,7 @@ class CumsumOp : public ScanOp {
 };
 REGISTER_XLA_OP(Name("Cumsum")
                     .TypeConstraint("T", kScanOpTypes)
-                    .CompileTimeConstInput("axis"),
+                    .CompileTimeConstantInput("axis"),
                 CumsumOp);
 
 class CumprodOp : public ScanOp {
@@ -142,7 +144,7 @@ class CumprodOp : public ScanOp {
 };
 REGISTER_XLA_OP(Name("Cumprod")
                     .TypeConstraint("T", kScanOpTypes)
-                    .CompileTimeConstInput("axis"),
+                    .CompileTimeConstantInput("axis"),
                 CumprodOp);
 
 }  // anonymous namespace

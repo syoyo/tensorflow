@@ -42,8 +42,9 @@ class CollectiveRemoteAccessLocalTest : public ::testing::Test {
     SessionOptions options;
     auto* device_count = options.config.mutable_device_count();
     device_count->insert({"CPU", NUM_DEVS});
-    TF_CHECK_OK(DeviceFactory::AddDevices(options, kTaskName, &devices_));
-    device_mgr_.reset(new DeviceMgr(devices_));
+    std::vector<std::unique_ptr<Device>> devices;
+    TF_CHECK_OK(DeviceFactory::AddDevices(options, kTaskName, &devices));
+    device_mgr_.reset(new DeviceMgr(std::move(devices)));
     drl_.reset(new DeviceResolverLocal(device_mgr_.get()));
     prl_.reset(new CollectiveParamResolverLocal(device_mgr_.get(), drl_.get(),
                                                 kTaskName));
@@ -51,7 +52,6 @@ class CollectiveRemoteAccessLocalTest : public ::testing::Test {
                                                kStepId));
   }
 
-  std::vector<Device*> devices_;
   std::unique_ptr<DeviceMgr> device_mgr_;
   std::unique_ptr<DeviceResolverLocal> drl_;
   std::unique_ptr<CollectiveParamResolverLocal> prl_;
@@ -69,6 +69,7 @@ TEST_F(CollectiveRemoteAccessLocalTest, PostRecvCPU0) {
   rma_->RecvFromPeer(kTaskName + "/device:CPU:0", kTaskName, true /*is_local*/,
                      "key_0", cpu0 /*to_device*/, nullptr /*to_device_ctx*/,
                      attr /*to_alloc_attr*/, &sink_tensor, dev_locality,
+                     0 /*stream_index*/,
                      [this, &recv_note, &recv_status](const Status& s) {
                        recv_status = s;
                        recv_note.Notify();
@@ -111,6 +112,7 @@ TEST_F(CollectiveRemoteAccessLocalTest, PostRecvCPU1_2) {
   rma_->RecvFromPeer(kTaskName + "/device:CPU:1", kTaskName, true /*is_local*/,
                      "key_0", cpu2 /*to_device*/, nullptr /*to_device_ctx*/,
                      attr /*to_alloc_attr*/, &sink_tensor, dev_locality,
+                     0 /*stream_index*/,
                      [this, &recv_note, &recv_status](const Status& s) {
                        recv_status = s;
                        recv_note.Notify();

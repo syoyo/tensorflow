@@ -20,7 +20,7 @@ option cc_enable_arenas = true;
 option java_outer_classname = "DistributedRuntimeProtos";
 option java_multiple_files = true;
 option java_package = "org.tensorflow.distruntime";
-
+option go_package = "github.com/tensorflow/tensorflow/tensorflow/go/core/protobuf";
 import "tensorflow/core/framework/device_attributes.proto";
 import "tensorflow/core/framework/graph.proto";
 import "tensorflow/core/framework/tensor.proto";
@@ -224,7 +224,7 @@ message CloseSessionResponse {
 message ResetRequest {
   // A list of container names, which may be empty.
   //
-  // If 'container' is not empty, releases resoures in the given
+  // If 'container' is not empty, releases resources in the given
   // containers in all devices.
   //
   // If 'container' is empty, releases resources in the default

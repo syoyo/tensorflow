@@ -156,6 +156,16 @@ TF_CALL_int32(REGISTER_KERNEL);
 TF_CALL_int64(REGISTER_KERNEL);
 #undef REGISTER_KERNEL
 
+#define REGISTER_KERNEL(T)                             \
+  REGISTER_KERNEL_BUILDER(Name("DataFormatVecPermute") \
+                              .Device(DEVICE_CPU)      \
+                              .Label("host")           \
+                              .TypeConstraint<T>("T"), \
+                          DataFormatVecPermuteOp<CPUDevice, T>);
+TF_CALL_int32(REGISTER_KERNEL);
+TF_CALL_int64(REGISTER_KERNEL);
+#undef REGISTER_KERNEL
+
 #if GOOGLE_CUDA
 // Forward declarations of the functor specializations for GPU.
 namespace functor {
@@ -195,7 +205,14 @@ TF_CALL_int64(REGISTER_GPU_KERNEL);
 #define REGISTER_GPU_KERNEL(T)                                                \
   REGISTER_KERNEL_BUILDER(                                                    \
       Name("DataFormatVecPermute").Device(DEVICE_GPU).TypeConstraint<T>("T"), \
-      DataFormatVecPermuteOp<GPUDevice, T>);
+      DataFormatVecPermuteOp<GPUDevice, T>);                                  \
+  REGISTER_KERNEL_BUILDER(Name("DataFormatVecPermute")                        \
+                              .Device(DEVICE_GPU)                             \
+                              .HostMemory("x")                                \
+                              .HostMemory("y")                                \
+                              .Label("host")                                  \
+                              .TypeConstraint<T>("T"),                        \
+                          DataFormatVecPermuteOp<CPUDevice, T>);
 TF_CALL_int32(REGISTER_GPU_KERNEL);
 TF_CALL_int64(REGISTER_GPU_KERNEL);
 #undef REGISTER_GPU_KERNEL

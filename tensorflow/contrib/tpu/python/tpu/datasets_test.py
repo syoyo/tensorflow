@@ -26,6 +26,8 @@ from tensorflow.core.protobuf import config_pb2
 from tensorflow.python.client import session
 from tensorflow.python.data.ops import dataset_ops
 from tensorflow.python.data.ops import readers
+from tensorflow.python.framework import dtypes
+from tensorflow.python.framework import tensor_shape
 from tensorflow.python.lib.io import python_io
 from tensorflow.python.platform import test
 from tensorflow.python.training import server_lib
@@ -68,7 +70,7 @@ class DatasetsTest(test.TestCase):
     dataset = datasets.StreamingFilesDataset(
         os.path.join(self.get_temp_dir(), 'text_line.*.txt'), filetype='text')
 
-    iterator = dataset.make_initializable_iterator()
+    iterator = dataset_ops.make_initializable_iterator(dataset)
     self._sess.run(iterator.initializer)
     get_next = iterator.get_next()
 
@@ -92,7 +94,7 @@ class DatasetsTest(test.TestCase):
     dataset = datasets.StreamingFilesDataset(
         os.path.join(self.get_temp_dir(), 'tf_record*'), filetype='tfrecord')
 
-    iterator = dataset.make_initializable_iterator()
+    iterator = dataset_ops.make_initializable_iterator(dataset)
     self._sess.run(iterator.initializer)
     get_next = iterator.get_next()
 
@@ -119,7 +121,7 @@ class DatasetsTest(test.TestCase):
 
     dataset = datasets.StreamingFilesDataset(filenames, filetype='tfrecord')
 
-    iterator = dataset.make_initializable_iterator()
+    iterator = dataset_ops.make_initializable_iterator(dataset)
     self._sess.run(iterator.initializer)
     get_next = iterator.get_next()
 
@@ -152,7 +154,7 @@ class DatasetsTest(test.TestCase):
         os.path.join(self.get_temp_dir(), 'fixed_length*'),
         filetype=FixedLengthFile)
 
-    iterator = dataset.make_initializable_iterator()
+    iterator = dataset_ops.make_initializable_iterator(dataset)
     self._sess.run(iterator.initializer)
     get_next = iterator.get_next()
 
@@ -161,6 +163,30 @@ class DatasetsTest(test.TestCase):
       retrieved_values.append(compat.as_bytes(self._sess.run(get_next)))
 
     self.assertEqual(set(all_contents), set(retrieved_values))
+
+  def testArbitraryReaderFuncFromDatasetGenerator(self):
+
+    def my_generator():
+      yield (1, [1] * 10)
+
+    def gen_dataset(dummy):
+      return dataset_ops.Dataset.from_generator(
+          my_generator, (dtypes.int64, dtypes.int64),
+          (tensor_shape.TensorShape([]), tensor_shape.TensorShape([10])))
+
+    dataset = datasets.StreamingFilesDataset(
+        dataset_ops.Dataset.range(10), filetype=gen_dataset)
+
+    iterator = dataset_ops.make_initializable_iterator(dataset)
+    self._sess.run(iterator.initializer)
+    get_next = iterator.get_next()
+
+    retrieved_values = self._sess.run(get_next)
+
+    self.assertIsInstance(retrieved_values, (list, tuple))
+    self.assertEqual(len(retrieved_values), 2)
+    self.assertEqual(retrieved_values[0], 1)
+    self.assertItemsEqual(retrieved_values[1], [1] * 10)
 
   def testUnexpectedFiletypeString(self):
     with self.assertRaises(ValueError):

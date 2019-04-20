@@ -38,16 +38,19 @@ class CollectiveExecutorMgrTest : public ::testing::Test {
     auto* device_count = options.config.mutable_device_count();
     string task_name = "/job:localhost/replica:0/task:0";
     device_count->insert({"CPU", NUM_DEVS});
-    TF_CHECK_OK(DeviceFactory::AddDevices(options, task_name, &devices_));
-    device_mgr_.reset(new DeviceMgr(devices_));
-    DeviceResolverLocal* drl = new DeviceResolverLocal(device_mgr_.get());
-    cme_.reset(new CollectiveExecutorMgr(
-        cp, device_mgr_.get(), drl,
-        new CollectiveParamResolverLocal(device_mgr_.get(), drl, task_name)));
+    std::vector<std::unique_ptr<Device>> devices;
+    TF_CHECK_OK(DeviceFactory::AddDevices(options, task_name, &devices));
+    device_mgr_.reset(new DeviceMgr(std::move(devices)));
+    std::unique_ptr<DeviceResolverInterface> drl(
+        new DeviceResolverLocal(device_mgr_.get()));
+    std::unique_ptr<ParamResolverInterface> prl(
+        new CollectiveParamResolverLocal(device_mgr_.get(), drl.get(),
+                                         task_name));
+    cme_.reset(new CollectiveExecutorMgr(cp, device_mgr_.get(), std::move(drl),
+                                         std::move(prl)));
   }
 
   std::unique_ptr<CollectiveExecutorMgr> cme_;
-  std::vector<Device*> devices_;
   std::unique_ptr<DeviceMgr> device_mgr_;
 };
 

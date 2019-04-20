@@ -29,7 +29,6 @@ limitations under the License.
 #include "tensorflow/core/grappler/grappler_item.h"
 #include "tensorflow/core/grappler/op_types.h"
 #include "tensorflow/core/grappler/optimizers/layout_optimizer.h"
-#include "tensorflow/core/grappler/utils.h"
 #include "tensorflow/core/grappler/utils/frame.h"
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/str_util.h"
@@ -119,6 +118,8 @@ std::set<string> GetOpsFormatAgnostic() {
                                           "Exit",
                                           "Exp",
                                           "Expm1",
+                                          "FakeQuantWithMinMaxVars",
+                                          "FakeQuantWithMinMaxArgs",
                                           "Fill",
                                           "Floor",
                                           "FloorDiv",
@@ -161,6 +162,8 @@ std::set<string> GetOpsFormatAgnostic() {
                                           "PreventGradient",
                                           "Prod",
                                           "Polygamma",
+                                          "QuantizeAndDequantizeV2",
+                                          "QuantizeAndDequantizeV3",
                                           "Pow",
                                           "Real",
                                           "RealDiv",
@@ -499,6 +502,7 @@ class NodeProcessor : public GraphProcessor {
       UpdateAttrDataFormat();
       UpdateAttrKSize();
       UpdateAttrStrides();
+      UpdateAttrDilations();
       UpdateAttrShape();
       TF_RETURN_IF_ERROR(AddLayoutTransposeToInputs());
       TF_RETURN_IF_ERROR(AddLayoutTransposeToOutputs());
@@ -742,6 +746,13 @@ class NodeProcessor : public GraphProcessor {
     }
   }
 
+  void UpdateAttrDilations() {
+    if (node_->attr().find("dilations") != node_->attr().end()) {
+      auto list = node_->mutable_attr()->at("dilations").mutable_list();
+      UpdateTuple(list);
+    }
+  }
+
   void UpdateAttrDataFormat() {
     if (node_->attr().find("data_format") != node_->attr().end()) {
       if (node_->attr().at("data_format").s().compare("NHWC") == 0) {
@@ -909,7 +920,7 @@ class NodeProcessor : public GraphProcessor {
     list->set_i(3, w);
   }
 
-  string MaybeGetHostDevice(const string& input_name) const {
+  bool IsInputOnHost(const string& input_name) const {
     string device = node_->device();
     DeviceNameUtils::ParsedName parsed_name;
     if (DeviceNameUtils::ParseFullName(device, &parsed_name)) {
@@ -918,13 +929,11 @@ class NodeProcessor : public GraphProcessor {
         int port;
         ParseNodeName(input_name, &port);
         if (IsHostMemory(*input, port)) {
-          parsed_name.type = "CPU";
-          parsed_name.id = 0;
-          device = DeviceNameUtils::ParsedNameToString(parsed_name);
+          return true;
         }
       }
     }
-    return device;
+    return false;
   }
 
   NodeDef* AddNodeDataFormatOp(const string& name, const string& input_name,
@@ -934,9 +943,14 @@ class NodeProcessor : public GraphProcessor {
     added_node->set_name(name);
     added_node->set_op(op);
     node_map_->AddNode(added_node->name(), added_node);
+    added_node->set_device(node_->device());
     // The inputs of a DataFormat op could be in host memory for ops such as
-    // Reshape.
-    added_node->set_device(MaybeGetHostDevice(input_name));
+    // Reshape. In such cases, run the kernel on the host too.
+    if (IsInputOnHost(input_name)) {
+      AttrValue attr_kernel;
+      attr_kernel.set_s("host");
+      added_node->mutable_attr()->insert({"_kernel", attr_kernel});
+    }
     AttrValue attr_data_type;
     attr_data_type.set_type(dtype);
     added_node->mutable_attr()->insert({"T", attr_data_type});
@@ -1954,9 +1968,9 @@ class DataLayoutOptimizer : GraphProcessor {
   // Expand all nodes which is in NHWC, but supports NCHW or is layout agnostic.
   Status Expand() {
     int node_size_original = graph_->node_size();
-    std::unordered_map<const NodeDef*, std::vector<int>> frames;
-    int num_frames;
-    TF_RETURN_IF_ERROR(IdentifyFrames(*graph_, &frames, &num_frames));
+
+    FrameView frame_view;
+    TF_RETURN_IF_ERROR(frame_view.InferFromGraph(*graph_));
 
     // This is the first pass where we expand the nodes which support NCHW.
     std::set<string> ops_format_supported = GetOpsFormatSupported();
@@ -1968,7 +1982,7 @@ class DataLayoutOptimizer : GraphProcessor {
       if (ops_format_supported.find(graph_->node(i).op()) !=
           ops_format_supported.end()) {
         auto node = graph_->mutable_node(i);
-        bool is_in_frame = !frames[node].empty();
+        bool is_in_frame = frame_view.IsInFrame(*node);
         OptimizeContext opt_cxt(graph_, node, node_map_, graph_properties_,
                                 virtual_placer_, nodes_to_preserve_,
                                 is_in_frame);
@@ -2018,7 +2032,7 @@ class DataLayoutOptimizer : GraphProcessor {
         if (ops_format_agnostic.find(graph_->node(i).op()) !=
             ops_format_agnostic.end()) {
           auto node = graph_->mutable_node(i);
-          bool is_in_frame = !frames[node].empty();
+          bool is_in_frame = frame_view.IsInFrame(*node);
           OptimizeContext opt_cxt(graph_, node, node_map_, graph_properties_,
                                   virtual_placer_, nodes_to_preserve_,
                                   is_in_frame);
@@ -2132,14 +2146,7 @@ int GetNumGPUs(const Cluster& cluster) {
   int num_gpus = 0;
   for (const auto& device : devices) {
     if (device.second.type() == "GPU") {
-      if (device.second.environment().find("architecture") !=
-          device.second.environment().end()) {
-        const string arch = device.second.environment().at("architecture");
-        // TODO(yaozhang): Enable for Volta GPUs (compute capability version 7).
-        if (arch < "7") {
-          num_gpus++;
-        }
-      }
+      num_gpus++;
     }
   }
   return num_gpus;
@@ -2184,10 +2191,11 @@ Status LayoutOptimizer::Optimize(Cluster* cluster, const GrapplerItem& item,
     *output = item.graph;
     return status;
   }
+  GRAPPLER_RETURN_IF_DEADLINE_EXCEEDED();
 
   TuningConfig config;
   config.no_gemm = true;
-  // TODO(yaozhang): Enable tuning with various TuningConfig choices wtih
+  // TODO(yaozhang): Enable tuning with various TuningConfig choices with
   // the measurement-based estimator.
   status = Tune(item, graph_properties, config, output);
   if (!status.ok()) {

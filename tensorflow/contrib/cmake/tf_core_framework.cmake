@@ -125,6 +125,7 @@ endfunction()
 
 file(GLOB_RECURSE tf_protos_cc_srcs RELATIVE ${tensorflow_source_dir}
     "${tensorflow_source_dir}/tensorflow/core/*.proto"
+    "${tensorflow_source_dir}/tensorflow/compiler/xla/*.proto"
     "${tensorflow_source_dir}/tensorflow/contrib/boosted_trees/proto/*.proto"
     "${tensorflow_source_dir}/tensorflow/contrib/tpu/proto/*.proto"
 )
@@ -139,16 +140,19 @@ set(tf_proto_text_srcs
     "tensorflow/core/example/example.proto"
     "tensorflow/core/example/feature.proto"
     "tensorflow/core/framework/allocation_description.proto"
+    "tensorflow/core/framework/api_def.proto"
     "tensorflow/core/framework/attr_value.proto"
     "tensorflow/core/framework/cost_graph.proto"
     "tensorflow/core/framework/device_attributes.proto"
     "tensorflow/core/framework/function.proto"
     "tensorflow/core/framework/graph.proto"
     "tensorflow/core/framework/graph_transfer_info.proto"
+    "tensorflow/core/framework/iterator.proto"
     "tensorflow/core/framework/kernel_def.proto"
     "tensorflow/core/framework/log_memory.proto"
     "tensorflow/core/framework/node_def.proto"
     "tensorflow/core/framework/op_def.proto"
+    "tensorflow/core/framework/reader_base.proto"
     "tensorflow/core/framework/remote_fused_graph_execute_info.proto"
     "tensorflow/core/framework/resource_handle.proto"
     "tensorflow/core/framework/step_stats.proto"
@@ -158,6 +162,7 @@ set(tf_proto_text_srcs
     "tensorflow/core/framework/tensor_shape.proto"
     "tensorflow/core/framework/tensor_slice.proto"
     "tensorflow/core/framework/types.proto"
+    "tensorflow/core/framework/variable.proto"
     "tensorflow/core/framework/versions.proto"
     "tensorflow/core/lib/core/error_codes.proto"
     "tensorflow/core/protobuf/cluster.proto"
@@ -203,19 +208,15 @@ file(GLOB tf_core_platform_srcs
     "${tensorflow_source_dir}/tensorflow/core/framework/resource_handle.h"
     "${tensorflow_source_dir}/tensorflow/core/framework/resource_handle.cc")
 if (NOT tensorflow_ENABLE_GPU)
-  file(GLOB tf_core_platform_gpu_srcs
+  file(GLOB tf_core_platform_gpu_srcs_exclude
       "${tensorflow_source_dir}/tensorflow/core/platform/cuda_libdevice_path.*"
       "${tensorflow_source_dir}/tensorflow/core/platform/default/cuda_libdevice_path.*")
-  list(REMOVE_ITEM tf_core_platform_srcs ${tf_core_platform_gpu_srcs})
+  list(REMOVE_ITEM tf_core_platform_srcs ${tf_core_platform_gpu_srcs_exclude})
 else()
   file(GLOB tf_core_platform_srcs_exclude
       "${tensorflow_source_dir}/tensorflow/core/platform/default/device_tracer.cc")
   list(REMOVE_ITEM tf_core_platform_srcs ${tf_core_platform_srcs_exclude})
 endif()
-
-file(GLOB tf_core_platform_exclude_srcs
-  "${tensorflow_source_dir}/tensorflow/core/platform/variant_coding.cc")
-list(REMOVE_ITEM tf_core_platform_srcs ${tf_core_platform_exclude_srcs})
 
 list(APPEND tf_core_lib_srcs ${tf_core_platform_srcs})
 
@@ -236,15 +237,6 @@ if(WIN32)
   )
   list(APPEND tf_core_lib_srcs ${tf_core_platform_windows_srcs})
 endif(WIN32)
-
-if(tensorflow_ENABLE_SSL_SUPPORT)
-  # Cloud libraries require boringssl.
-  file(GLOB tf_core_platform_cloud_srcs
-      "${tensorflow_source_dir}/tensorflow/core/platform/cloud/*.h"
-      "${tensorflow_source_dir}/tensorflow/core/platform/cloud/*.cc"
-  )
-  list(APPEND tf_core_lib_srcs ${tf_core_platform_cloud_srcs})
-endif()
 
 if (tensorflow_ENABLE_HDFS_SUPPORT)
   list(APPEND tf_core_platform_hdfs_srcs
@@ -270,14 +262,21 @@ add_dependencies(tf_core_lib ${tensorflow_EXTERNAL_DEPENDENCIES} tf_protos_cc)
 # force_rebuild always runs forcing ${VERSION_INFO_CC} target to run
 # ${VERSION_INFO_CC} would cache, but it depends on a phony never produced
 # target.
-set(VERSION_INFO_CC ${tensorflow_source_dir}/tensorflow/core/util/version_info.cc)
-add_custom_target(force_rebuild_target ALL DEPENDS ${VERSION_INFO_CC})
-add_custom_command(OUTPUT __force_rebuild COMMAND ${CMAKE_COMMAND} -E echo)
-add_custom_command(OUTPUT
-    ${VERSION_INFO_CC}
-    COMMAND ${PYTHON_EXECUTABLE} ${tensorflow_source_dir}/tensorflow/tools/git/gen_git_source.py
-    ARGS --raw_generate ${VERSION_INFO_CC} --source_dir ${tensorflow_source_dir} --git_tag_override=${GIT_TAG_OVERRIDE}
-    DEPENDS __force_rebuild)
+# This code forces rebuild every time, not needed as version from git is fetched only once
+# move to make.bat which mimicks make.sh
+
+if (NOT WIN32)
+
+  set(VERSION_INFO_CC ${tensorflow_source_dir}/tensorflow/core/util/version_info.cc)
+  add_custom_target(force_rebuild_target ALL DEPENDS ${VERSION_INFO_CC})
+  add_custom_command(OUTPUT __force_rebuild COMMAND ${CMAKE_COMMAND} -E echo)
+  add_custom_command(OUTPUT
+      ${VERSION_INFO_CC}
+      COMMAND ${PYTHON_EXECUTABLE} ${tensorflow_source_dir}/tensorflow/tools/git/gen_git_source.py
+      ARGS --raw_generate ${VERSION_INFO_CC} --source_dir ${tensorflow_source_dir} --git_tag_override=${GIT_TAG_OVERRIDE}
+      DEPENDS __force_rebuild)
+endif()
+
 set(tf_version_srcs ${tensorflow_source_dir}/tensorflow/core/util/version_info.cc)
 
 ########################################################
@@ -286,8 +285,6 @@ set(tf_version_srcs ${tensorflow_source_dir}/tensorflow/core/util/version_info.c
 file(GLOB_RECURSE tf_core_framework_srcs
     "${tensorflow_source_dir}/tensorflow/core/framework/*.h"
     "${tensorflow_source_dir}/tensorflow/core/framework/*.cc"
-    "${tensorflow_source_dir}/tensorflow/core/platform/variant_coding.h"
-    "${tensorflow_source_dir}/tensorflow/core/platform/variant_coding.cc"
     "${tensorflow_source_dir}/tensorflow/core/graph/edgeset.h"
     "${tensorflow_source_dir}/tensorflow/core/graph/edgeset.cc"
     "${tensorflow_source_dir}/tensorflow/core/graph/graph.h"
@@ -341,9 +338,3 @@ add_dependencies(tf_core_framework
     tf_core_lib
     proto_text
 )
-
-if(WIN32)
-  # Cmake > 3.6 will quote this as -D"__VERSION__=\"MSVC\"" which nvcc fails on.
-  # Instead of defining this global, limit it to tf_core_framework where its used.
-  target_compile_definitions(tf_core_framework PRIVATE __VERSION__="MSVC")
-endif()

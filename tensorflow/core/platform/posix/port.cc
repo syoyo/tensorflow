@@ -13,24 +13,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifdef TENSORFLOW_USE_JEMALLOC
-#include "jemalloc/jemalloc.h"
-#endif
-
-#ifdef TENSORFLOW_USE_ABSL
 #include "absl/base/internal/sysinfo.h"
-#endif
 
 #include "tensorflow/core/platform/cpu_info.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/mem.h"
+#include "tensorflow/core/platform/numa.h"
 #include "tensorflow/core/platform/snappy.h"
 #include "tensorflow/core/platform/types.h"
 
 #if defined(__linux__) && !defined(__ANDROID__)
 #include <sched.h>
 #include <sys/sysinfo.h>
+#else
+#include <sys/syscall.h>
 #endif
+
+#if (__x86_64__ || __i386__)
+#include <cpuid.h>
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,6 +76,54 @@ int NumSchedulableCPUs() {
   return kDefaultCores;
 }
 
+int NumTotalCPUs() {
+  int count = absl::base_internal::NumCPUs();
+  return (count <= 0) ? kUnknownCPU : count;
+}
+
+int GetCurrentCPU() {
+#if defined(__linux__) && !defined(__ANDROID__)
+  return sched_getcpu();
+  // Attempt to use cpuid on all other platforms.  If that fails, perform a
+  // syscall.
+#elif defined(__cpuid) && !defined(__APPLE__)
+  // TODO(b/120919972): __cpuid returns invalid APIC ids on OS X.
+  uint32_t eax = 0;
+  uint32_t ebx = 0;
+  uint32_t ecx = 0;
+  uint32_t edx = 0;
+  __cpuid(/*level=*/1, eax, ebx, ecx, edx);
+  if ((edx & /*bit_APIC=*/(1 << 9)) != 0) {
+    // EBX bits 24-31 are APIC ID
+    return (ebx & 0xFF) >> 24;
+  }
+#elif defined(__NR_getcpu)
+  unsigned int cpu;
+  if (syscall(__NR_getcpu, &cpu, NULL, NULL) < 0) {
+    return kUnknownCPU;
+  } else {
+    return static_cast<int>(cpu);
+  }
+#endif
+  return kUnknownCPU;
+}
+
+int NumHyperthreadsPerCore() {
+  static const int ht_per_core = tensorflow::port::CPUIDNumSMT();
+  return (ht_per_core > 0) ? ht_per_core : 1;
+}
+
+bool NUMAEnabled() {
+  // Not yet implemented: coming soon.
+  return false;
+}
+
+int NUMANumNodes() { return 1; }
+
+void NUMASetThreadNodeAffinity(int node) {}
+
+int NUMAGetThreadNodeAffinity() { return kNUMANoAffinity; }
+
 void* AlignedMalloc(size_t size, int minimum_alignment) {
 #if defined(__ANDROID__)
   return memalign(minimum_alignment, size);
@@ -84,11 +134,7 @@ void* AlignedMalloc(size_t size, int minimum_alignment) {
   // memory aligned to at least the size of a pointer.
   const int required_alignment = sizeof(void*);
   if (minimum_alignment < required_alignment) return Malloc(size);
-#ifdef TENSORFLOW_USE_JEMALLOC
-  int err = jemalloc_posix_memalign(&ptr, minimum_alignment, size);
-#else
   int err = posix_memalign(&ptr, minimum_alignment, size);
-#endif
   if (err != 0) {
     return nullptr;
   } else {
@@ -99,29 +145,19 @@ void* AlignedMalloc(size_t size, int minimum_alignment) {
 
 void AlignedFree(void* aligned_memory) { Free(aligned_memory); }
 
-void* Malloc(size_t size) {
-#ifdef TENSORFLOW_USE_JEMALLOC
-  return jemalloc_malloc(size);
-#else
-  return malloc(size);
-#endif
+void* Malloc(size_t size) { return malloc(size); }
+
+void* Realloc(void* ptr, size_t size) { return realloc(ptr, size); }
+
+void Free(void* ptr) { free(ptr); }
+
+void* NUMAMalloc(int node, size_t size, int minimum_alignment) {
+  return AlignedMalloc(size, minimum_alignment);
 }
 
-void* Realloc(void* ptr, size_t size) {
-#ifdef TENSORFLOW_USE_JEMALLOC
-  return jemalloc_realloc(ptr, size);
-#else
-  return realloc(ptr, size);
-#endif
-}
+void NUMAFree(void* ptr, size_t size) { Free(ptr); }
 
-void Free(void* ptr) {
-#ifdef TENSORFLOW_USE_JEMALLOC
-  jemalloc_free(ptr);
-#else
-  free(ptr);
-#endif
-}
+int NUMAGetMemAffinity(const void* addr) { return kNUMANoAffinity; }
 
 void MallocExtension_ReleaseToSystem(std::size_t num_bytes) {
   // No-op.
@@ -165,11 +201,7 @@ bool Snappy_Uncompress(const char* input, size_t length, char* output) {
 string Demangle(const char* mangled) { return mangled; }
 
 double NominalCPUFrequency() {
-#ifdef TENSORFLOW_USE_ABSL
   return absl::base_internal::NominalCPUFrequency();
-#else
-  return 1.0;
-#endif
 }
 
 int64 AvailableRam() {

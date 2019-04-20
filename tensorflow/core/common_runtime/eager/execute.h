@@ -17,6 +17,7 @@ limitations under the License.
 
 #include "tensorflow/core/common_runtime/device.h"
 #include "tensorflow/core/common_runtime/eager/context.h"
+#include "tensorflow/core/common_runtime/eager/eager_operation.h"
 #include "tensorflow/core/common_runtime/eager/kernel_and_device.h"
 #include "tensorflow/core/common_runtime/eager/tensor_handle.h"
 #include "tensorflow/core/framework/step_stats.pb.h"
@@ -25,12 +26,29 @@ limitations under the License.
 
 namespace tensorflow {
 
+// Utility function that executes a fully constructed EagerOperation.
+// There are a few possible different combinations of how things can be
+// executed:
+//  - Async (the op context is configured to schedule asynchronously)
+//    Eager execute should return quickly after scheduling this operation to
+//    execute.
+//  - Remote (the op device is on a remote task)
+//    Eager execute will send an RPC to execute the op on a remote device.
+//  Note that in the Async + Remote case, EagerExecute should still return
+//  quickly, but it will schedule the op to be executed remotely.
+Status EagerExecute(
+    EagerOperation* op,
+    tensorflow::gtl::InlinedVector<tensorflow::TensorHandle*, 2>* retvals,
+    int* num_retvals);
+
 // Low-level utility to execute the kernel specified by kernel on device device,
 // with the inputs op_inputs, in the context ctx.
 Status EagerExecute(EagerContext* ctx, Device* device,
                     const gtl::InlinedVector<TensorHandle*, 4>& op_inputs,
                     KernelAndDevice* kernel, NodeExecStats* maybe_stats,
-                    TensorHandle** retvals, int num_retvals);
+                    StepStats* maybe_step_stats,
+                    GraphCollector* graph_collector, TensorHandle** retvals,
+                    int num_retvals);
 
 // Low-level utility to copy a tensor handle from one device to another.
 Status EagerCopyToDevice(TensorHandle* h, EagerContext* ctx,
