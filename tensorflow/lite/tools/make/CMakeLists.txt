@@ -5,6 +5,37 @@ project(tensorflow-lite)
 
 set(CMAKE_CXX_STANDARD 11)
 
+option(TFLITE_WITH_CCACHE "Build with ccache support" ON)
+
+# cmake modules
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/sanitizers)
+find_package(Sanitizers) # Address sanitizer (-DSANITIZE_ADDRESS=ON)
+
+# [ccache]
+if (TFLITE_WITH_CCACHE)
+  find_program(CCACHE_EXE ccache)
+  if (CCACHE_EXE)
+
+    message(STATUS "Use ccache : " ${CCACHE_EXE})
+    # CMAKE_C_COMPILER_LAUNCHER = available from cmake 3.4+)
+    if (CMAKE_C_COMPILER_LAUNCHER)
+      set(CMAKE_C_COMPILER_LAUNCHER "${CMAKE_C_COMPILER_LAUNCHER}" "${CCACHE_EXE}")
+    else()
+      set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_EXE}")
+    endif()
+
+    if (CMAKE_CXX_COMPILER_LAUNCHER)
+      set(CMAKE_CXX_COMPILER_LAUNCHER "${CMAKE_CXX_COMPILER_LAUNCHER}" "${CCACHE_EXE}")
+    else()
+      set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_EXE}")
+    endif()
+
+  endif (CCACHE_EXE)
+
+endif()
+
+
 list(APPEND TENSORFLOW_LITE_KERNEL_SOURCES
   ${PROJECT_SOURCE_DIR}/../../kernels/activations.cc
   ${PROJECT_SOURCE_DIR}/../../kernels/add.cc
@@ -135,7 +166,8 @@ set(TENSORFLOW_LITE_SOURCES
     ${PROJECT_SOURCE_DIR}/downloads/fft2d/fft4g.c
 )
 
-add_library(tensorflow-lite STATIC ${TENSORFLOW_LITE_SOURCES})
+add_library(tensorflow-lite SHARED ${TENSORFLOW_LITE_SOURCES})
+add_sanitizers(tensorflow-lite)
 
 target_include_directories(tensorflow-lite
     PUBLIC ../../../../
