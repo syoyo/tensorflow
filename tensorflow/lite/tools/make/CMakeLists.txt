@@ -166,6 +166,12 @@ set(TENSORFLOW_LITE_SOURCES
     ${PROJECT_SOURCE_DIR}/downloads/fft2d/fft4g.c
 )
 
+IF (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT EMSCRIPTEN)
+  # Assume C++ sources
+  set_source_files_properties(${TENSORFLOW_LITE_SOURCES} PROPERTIES COMPILE_FLAGS "-Wno-extern-c-compat")
+ENDIF ()
+
+
 add_library(tensorflow-lite SHARED ${TENSORFLOW_LITE_SOURCES})
 add_sanitizers(tensorflow-lite)
 
