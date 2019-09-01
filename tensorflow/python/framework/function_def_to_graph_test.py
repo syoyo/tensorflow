@@ -29,6 +29,7 @@ from tensorflow.python.framework import test_util
 from tensorflow.python.framework import test_ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import variables
 from tensorflow.python.platform import test
 
 
@@ -225,12 +226,15 @@ class FunctionDefToGraphDefTest(test.TestCase):
 
   def testControlDependencies(self):
 
+    v = variables.Variable(1)
+
     @function.defun
     def fn(inp):
+      assign = v.assign(3, name="assign", read_value=False)
       x = constant_op.constant(2.0, name="x")
       # TODO(b/79881896): Test external control dependency once that's
       # supported.
-      with ops.control_dependencies([x, inp]):
+      with ops.control_dependencies([x, inp, assign]):
         constant_op.constant(3.0, name="y")
       return 4.0
 
@@ -239,9 +243,27 @@ class FunctionDefToGraphDefTest(test.TestCase):
     func_graph = function_def_to_graph.function_def_to_graph(fdef)
 
     op = func_graph.get_operation_by_name("y")
-    self.assertEqual(len(op.control_inputs), 2)
-    self.assertEqual(op.control_inputs[0].name, "x")
+    self.assertEqual(len(op.control_inputs), 3)
+    self.assertEqual(op.control_inputs[0].name, "assign")
     self.assertEqual(op.control_inputs[1].name, "inp")
+    self.assertEqual(op.control_inputs[2].name, "x")
+
+  def testAttributesForArgDef(self):
+
+    @function.defun
+    def fn(x):
+      return x
+
+    inp = constant_op.constant(1.0)
+    fdef = fn.get_concrete_function(inp).function_def
+    fdef.arg_attr[0].attr["_test_attr"].s = "value".encode("ascii")
+    graph_def = function_def_to_graph.function_def_to_graph_def(fdef)
+    placeholders = [
+        ndef for ndef in graph_def[0].node if ndef.op == "Placeholder"
+    ]
+    self.assertEqual(1, len(placeholders))
+    self.assertEqual(placeholders[0].attr["_test_attr"].s,
+                     "value".encode("ascii"))
 
 
 if __name__ == "__main__":

@@ -76,6 +76,12 @@ class GpuElementalIrEmitter : public ElementalIrEmitter {
   StatusOr<llvm::Value*> EmitExpm1(PrimitiveType prim_type,
                                    llvm::Value* value) override;
 
+  StatusOr<llvm::Value*> EmitSqrt(PrimitiveType prim_type,
+                                  llvm::Value* value) override;
+
+  StatusOr<llvm::Value*> EmitRsqrt(PrimitiveType prim_type,
+                                   llvm::Value* value) override;
+
   StatusOr<llvm::Value*> EmitPow(PrimitiveType prim_type, llvm::Value* lhs,
                                  llvm::Value* rhs) override;
 
@@ -120,7 +126,6 @@ class GpuElementalIrEmitter : public ElementalIrEmitter {
       const string& callee_name, absl::Span<llvm::Value* const> operands,
       absl::Span<const PrimitiveType> input_types, PrimitiveType output_type);
 
-  const HloModuleConfig& hlo_module_config_;
   NestedComputer compute_nested_;
 };
 

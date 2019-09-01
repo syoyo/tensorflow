@@ -19,6 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import time
 import unittest
 
 from absl.testing import parameterized
@@ -33,8 +34,9 @@ from tensorflow.python.keras import keras_parameterized
 from tensorflow.python.keras import metrics as metrics_module
 from tensorflow.python.keras import testing_utils
 from tensorflow.python.keras.engine import training_generator
+from tensorflow.python.keras.optimizer_v2 import rmsprop
+from tensorflow.python.keras.utils import data_utils
 from tensorflow.python.platform import test
-from tensorflow.python.training.rmsprop import RMSPropOptimizer
 from tensorflow.python.util import nest
 
 
@@ -61,22 +63,55 @@ def custom_generator(mode=2):
       yield x, y, w
 
 
-class TestGeneratorMethods(keras_parameterized.TestCase):
+class ForkRobustTestCase(keras_parameterized.TestCase):
+  _sleep_at_end = False
+
+  def setUp(self):
+    # When setting up a test simply make a best effort to start from a clean
+    # state.
+    self._starting_remnants = data_utils.terminate_keras_multiprocessing_pools(
+        use_sigkill=False)
+
+    self._sleep_at_end = False
+    super(ForkRobustTestCase, self).setUp()
+
+  def tearDown(self):
+    # Give multiprocessing pools some time to finish on their own before
+    # cleanup_all_keras_forkpools yanks the rug out from under them. This is
+    # particularly important because calling .close() on a pool that is already
+    # in the process of spinning down can cause an uncatchable segmentation
+    # fault at which point the tearDown will hang.
+    if self._sleep_at_end:
+      time.sleep(1)
+
+    # If a test finishes and leaves behind uncleanable artifacts then that is a
+    # failure condition. However, if the state was not clean to begin with the
+    # test should not fail on that account.
+    new_remnants = set(data_utils.terminate_keras_multiprocessing_pools(
+        use_sigkill=True)).difference(self._starting_remnants)
+
+    if new_remnants:
+      raise ValueError('Test left behind stubborn orphans:\n  {}'.format(
+          '\n  '.join(new_remnants)))
+    super(ForkRobustTestCase, self).tearDown()
+
+
+class TestGeneratorMethods(ForkRobustTestCase):
 
   @unittest.skipIf(
       os.name == 'nt',
       'use_multiprocessing=True does not work on windows properly.')
-  # TODO(b/120940700): Bug with subclassed model inputs.
-  @keras_parameterized.run_with_all_model_types(exclude_models='subclass')
+  @keras_parameterized.run_with_all_model_types
   @keras_parameterized.run_all_keras_modes
   def test_fit_generator_method(self):
     model = testing_utils.get_small_mlp(
         num_hidden=3, num_classes=4, input_dim=2)
     model.compile(
         loss='mse',
-        optimizer='sgd',
+        optimizer=rmsprop.RMSprop(1e-3),
         metrics=['mae', metrics_module.CategoricalAccuracy()])
 
+    self._sleep_at_end = True
     model.fit_generator(custom_generator(),
                         steps_per_epoch=5,
                         epochs=1,
@@ -107,18 +142,18 @@ class TestGeneratorMethods(keras_parameterized.TestCase):
   @unittest.skipIf(
       os.name == 'nt',
       'use_multiprocessing=True does not work on windows properly.')
-  # TODO(b/120940700): Bug with subclassed model inputs.
-  @keras_parameterized.run_with_all_model_types(exclude_models='subclass')
+  @keras_parameterized.run_with_all_model_types
   @keras_parameterized.run_all_keras_modes
   def test_evaluate_generator_method(self):
     model = testing_utils.get_small_mlp(
         num_hidden=3, num_classes=4, input_dim=2)
     model.compile(
         loss='mse',
-        optimizer='sgd',
+        optimizer=rmsprop.RMSprop(1e-3),
         metrics=['mae', metrics_module.CategoricalAccuracy()],
         run_eagerly=testing_utils.should_run_eagerly())
 
+    self._sleep_at_end = True
     model.evaluate_generator(custom_generator(),
                              steps=5,
                              max_queue_size=10,
@@ -143,12 +178,9 @@ class TestGeneratorMethods(keras_parameterized.TestCase):
   def test_predict_generator_method(self):
     model = testing_utils.get_small_mlp(
         num_hidden=3, num_classes=4, input_dim=2)
-    model.compile(
-        loss='mse',
-        optimizer='sgd',
-        metrics=['mae', metrics_module.CategoricalAccuracy()],
-        run_eagerly=testing_utils.should_run_eagerly())
+    model.run_eagerly = testing_utils.should_run_eagerly()
 
+    self._sleep_at_end = True
     model.predict_generator(custom_generator(),
                             steps=5,
                             max_queue_size=10,
@@ -177,15 +209,14 @@ class TestGeneratorMethods(keras_parameterized.TestCase):
                             max_queue_size=10,
                             workers=0)
 
-  # TODO(b/120940700): Bug with subclassed model inputs.
-  @keras_parameterized.run_with_all_model_types(exclude_models='subclass')
+  @keras_parameterized.run_with_all_model_types
   @keras_parameterized.run_all_keras_modes
   def test_generator_methods_with_sample_weights(self):
     model = testing_utils.get_small_mlp(
         num_hidden=3, num_classes=4, input_dim=2)
     model.compile(
         loss='mse',
-        optimizer='sgd',
+        optimizer=rmsprop.RMSprop(1e-3),
         metrics=['mae', metrics_module.CategoricalAccuracy()],
         run_eagerly=testing_utils.should_run_eagerly())
 
@@ -212,8 +243,7 @@ class TestGeneratorMethods(keras_parameterized.TestCase):
                              max_queue_size=10,
                              use_multiprocessing=False)
 
-  # TODO(b/120940700): Bug with subclassed model inputs.
-  @keras_parameterized.run_with_all_model_types(exclude_models='subclass')
+  @keras_parameterized.run_with_all_model_types
   @keras_parameterized.run_all_keras_modes
   def test_generator_methods_invalid_use_case(self):
 
@@ -223,7 +253,7 @@ class TestGeneratorMethods(keras_parameterized.TestCase):
 
     model = testing_utils.get_small_mlp(
         num_hidden=3, num_classes=4, input_dim=2)
-    model.compile(loss='mse', optimizer='sgd',
+    model.compile(loss='mse', optimizer=rmsprop.RMSprop(1e-3),
                   run_eagerly=testing_utils.should_run_eagerly())
 
     with self.assertRaises(ValueError):
@@ -253,8 +283,7 @@ class TestGeneratorMethods(keras_parameterized.TestCase):
                                max_queue_size=10,
                                use_multiprocessing=False)
 
-  # TODO(b/120940700): Bug with subclassed model inputs.
-  @keras_parameterized.run_with_all_model_types(exclude_models='subclass')
+  @keras_parameterized.run_with_all_model_types
   @keras_parameterized.run_all_keras_modes
   def test_generator_input_to_fit_eval_predict(self):
     val_data = np.ones([10, 10], np.float32), np.ones([10, 1], np.float32)
@@ -266,7 +295,7 @@ class TestGeneratorMethods(keras_parameterized.TestCase):
     model = testing_utils.get_small_mlp(
         num_hidden=10, num_classes=1, input_dim=10)
 
-    model.compile(RMSPropOptimizer(0.001), 'binary_crossentropy',
+    model.compile(rmsprop.RMSprop(0.001), 'binary_crossentropy',
                   run_eagerly=testing_utils.should_run_eagerly())
     model.fit(
         ones_generator(),
@@ -277,10 +306,9 @@ class TestGeneratorMethods(keras_parameterized.TestCase):
     model.predict(ones_generator(), steps=2)
 
 
-class TestGeneratorMethodsWithSequences(keras_parameterized.TestCase):
+class TestGeneratorMethodsWithSequences(ForkRobustTestCase):
 
-  # TODO(b/120940700): Bug with subclassed model inputs.
-  @keras_parameterized.run_with_all_model_types(exclude_models='subclass')
+  @keras_parameterized.run_with_all_model_types
   @keras_parameterized.run_all_keras_modes
   def test_training_with_sequences(self):
 
@@ -294,7 +322,7 @@ class TestGeneratorMethodsWithSequences(keras_parameterized.TestCase):
 
     model = testing_utils.get_small_mlp(
         num_hidden=3, num_classes=4, input_dim=2)
-    model.compile(loss='mse', optimizer='sgd')
+    model.compile(loss='mse', optimizer=rmsprop.RMSprop(1e-3))
 
     model.fit_generator(DummySequence(),
                         steps_per_epoch=10,
@@ -311,8 +339,7 @@ class TestGeneratorMethodsWithSequences(keras_parameterized.TestCase):
                         workers=0,
                         use_multiprocessing=False)
 
-  # TODO(b/120940700): Bug with subclassed model inputs.
-  @keras_parameterized.run_with_all_model_types(exclude_models='subclass')
+  @keras_parameterized.run_with_all_model_types
   @keras_parameterized.run_all_keras_modes
   def test_sequence_input_to_fit_eval_predict(self):
     val_data = np.ones([10, 10], np.float32), np.ones([10, 1], np.float32)
@@ -328,7 +355,7 @@ class TestGeneratorMethodsWithSequences(keras_parameterized.TestCase):
     model = testing_utils.get_small_mlp(
         num_hidden=10, num_classes=1, input_dim=10)
 
-    model.compile(RMSPropOptimizer(0.001), 'binary_crossentropy')
+    model.compile(rmsprop.RMSprop(0.001), 'binary_crossentropy')
     model.fit(CustomSequence(), validation_data=val_data, epochs=2)
     model.evaluate(CustomSequence())
     model.predict(CustomSequence())

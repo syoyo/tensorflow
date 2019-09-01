@@ -16,9 +16,6 @@ limitations under the License.
 #ifndef TENSORFLOW_COMPILER_XLA_EXECUTABLE_RUN_OPTIONS_H_
 #define TENSORFLOW_COMPILER_XLA_EXECUTABLE_RUN_OPTIONS_H_
 
-// Pulls in the ::stream_executor -> ::xla::se namespace alias.
-#include "tensorflow/compiler/xla/types.h"
-
 // These classes are forward declared so that ExecutableRunOptions can be linked
 // into an XLA-compiled binary without having to link all of the pointed-to
 // objects (e.g., for an ahead-of-time compiled CPU binary, the gpu tools don't
@@ -26,13 +23,8 @@ limitations under the License.
 namespace stream_executor {
 class Stream;
 class Platform;
+class DeviceMemoryAllocator;
 }  // namespace stream_executor
-
-namespace tensorflow {
-namespace thread {
-class ThreadPool;
-}  // namespace thread
-}  // namespace tensorflow
 
 namespace Eigen {
 struct ThreadPoolDevice;
@@ -40,7 +32,6 @@ struct ThreadPoolDevice;
 
 namespace xla {
 
-class DeviceMemoryAllocator;
 class DeviceAssignment;
 class ExecutionProfile;
 
@@ -48,8 +39,9 @@ class ExecutionProfile;
 class ExecutableRunOptions {
  public:
   // Specifies the allocator to use during execution.
-  ExecutableRunOptions& set_allocator(DeviceMemoryAllocator* allocator);
-  DeviceMemoryAllocator* allocator() const;
+  ExecutableRunOptions& set_allocator(
+      stream_executor::DeviceMemoryAllocator* allocator);
+  stream_executor::DeviceMemoryAllocator* allocator() const;
 
   // If set, this is the device to run the computation on. Valid device_ordinal
   // values are: 0 to # of devices - 1. These values are identical to the device
@@ -73,6 +65,12 @@ class ExecutableRunOptions {
   stream_executor::Stream* host_to_device_stream() const;
 
   // Sets the thread pool device on which to run Eigen subcomputations.
+  //
+  // This field must be set for XLA:CPU models that call Eigen routines, but may
+  // be null otherwise.  Routines that use this field should always CHECK (or
+  // TF_RET_CHECK) that it's not null before dereferencing it, so that users get
+  // a clean crash rather than a segfault.
+  //
   // Does not take ownership.
   ExecutableRunOptions& set_intra_op_thread_pool(
       const Eigen::ThreadPoolDevice* intra_op_thread_pool);
@@ -83,16 +81,16 @@ class ExecutableRunOptions {
   ExecutableRunOptions& set_execution_profile(ExecutionProfile* profile);
 
   ExecutableRunOptions& set_device_assignment(
-      DeviceAssignment* device_assignment);
+      const DeviceAssignment* device_assignment);
   const DeviceAssignment* device_assignment() const;
 
   ExecutableRunOptions& set_rng_seed(int rng_seed);
   int rng_seed() const;
 
  private:
-  DeviceMemoryAllocator* allocator_ = nullptr;
+  stream_executor::DeviceMemoryAllocator* allocator_ = nullptr;
   int device_ordinal_ = -1;
-  DeviceAssignment* device_assignment_ = nullptr;
+  const DeviceAssignment* device_assignment_ = nullptr;
   stream_executor::Stream* stream_ = nullptr;
   const Eigen::ThreadPoolDevice* intra_op_thread_pool_ = nullptr;
   ExecutionProfile* execution_profile_ = nullptr;

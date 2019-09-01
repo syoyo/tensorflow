@@ -17,10 +17,12 @@ limitations under the License.
 #define TENSORFLOW_CORE_COMMON_RUNTIME_EXECUTOR_H_
 
 #include "tensorflow/core/common_runtime/device.h"
+#include "tensorflow/core/common_runtime/rendezvous_mgr.h"
 #include "tensorflow/core/framework/rendezvous.h"
 #include "tensorflow/core/framework/session_state.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/graph/graph.h"
+#include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/notification.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/logging.h"
@@ -80,6 +82,9 @@ class Executor {
   //
   // RunAsync() dispatches closures to "runner". Typically, "runner"
   // is backed up by a bounded threadpool.
+  typedef std::function<Status(const int64, const DeviceMgr*, Rendezvous** r)>
+      RendezvousFactory;
+
   struct Args {
     int64 step_id = 0;
     Rendezvous* rendezvous = nullptr;
@@ -87,6 +92,8 @@ class Executor {
     CallFrameInterface* call_frame = nullptr;
     CancellationManager* cancellation_manager = nullptr;
     SessionState* session_state = nullptr;
+    // Unique session identifier. Can be empty.
+    string session_handle;
     TensorStore* tensor_store = nullptr;
     ScopedStepContainer* step_container = nullptr;
     CollectiveExecutor* collective_executor = nullptr;
@@ -132,6 +139,8 @@ struct LocalExecutorParams {
   // when the executor is deleted.
   std::function<Status(const NodeDef&, OpKernel**)> create_kernel;
   std::function<void(OpKernel*)> delete_kernel;
+
+  Executor::RendezvousFactory rendezvous_factory;
 };
 ::tensorflow::Status NewLocalExecutor(const LocalExecutorParams& params,
                                       std::unique_ptr<const Graph> graph,
@@ -171,20 +180,7 @@ class ExecutorBarrier {
 
   mutable mutex mu_;
   int pending_ GUARDED_BY(mu_) = 0;
-  Status status_ GUARDED_BY(mu_);
-
-  void MergeStatusLocked(const Status& s) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-    if (s.ok()) {
-      return;
-    }
-
-    // Prefer primary failures over cancellations.  A cancellation may finish
-    // _before_ the original status is propagated; we override it in this case.
-    if (status_.ok() ||
-        str_util::StrContains(status_.error_message(), "[CHILD]")) {
-      status_ = s;
-    }
-  }
+  StatusGroup status_group_ GUARDED_BY(mu_);
 
   void WhenDone(const Status& s) {
     Rendezvous* error_rendez = nullptr;
@@ -196,32 +192,33 @@ class ExecutorBarrier {
 
       // If we are the first error encountered, trigger an abort of the
       // Rendezvous object by this thread only.
-      if (status_.ok() && !s.ok()) {
+      if (status_group_.ok() && !s.ok()) {
         error_rendez = rendez_;
         error_rendez->Ref();
       }
 
-      MergeStatusLocked(s);
-
-      if (!status_.ok()) {
-        status = status_;
-      }
+      status_group_.Update(s);
 
       // If this is the last call to WhenDone, call the final callback
       // below.
       if (--pending_ == 0) {
         CHECK(done_cb_ != nullptr);
         std::swap(done, done_cb_);
+        status = status_group_.as_summary_status();
       }
     }
 
     if (error_rendez != nullptr) {
-      error_rendez->StartAbort(status);
+      error_rendez->StartAbort(
+          errors::Aborted("Stopping remaining executors."));
       error_rendez->Unref();
     }
 
     if (done != nullptr) {
       delete this;
+      if (!status.ok()) {
+        VLOG(1) << "ExecutorBarrier finished with bad status: " << status;
+      }
       done(status);
     }
   }

@@ -19,17 +19,17 @@ from __future__ import division
 from __future__ import print_function
 
 from tensorflow.python.framework import ops
-from tensorflow.python.keras.optimizer_v2 import adam
+from tensorflow.python.keras import backend_config
+from tensorflow.python.keras.optimizer_v2 import optimizer_v2
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import resource_variable_ops
 from tensorflow.python.training import training_ops
-from tensorflow.python.util.tf_export import tf_export
+from tensorflow.python.util.tf_export import keras_export
 
 
-@tf_export('keras.optimizers.Adamax', v1=[])
-class Adamax(adam.Adam):
+@keras_export('keras.optimizers.Adamax')
+class Adamax(optimizer_v2.OptimizerV2):
   """Optimizer that implements the Adamax algorithm.
 
   It is a variant of Adam based on the infinity norm.
@@ -90,18 +90,25 @@ class Adamax(adam.Adam):
       epsilon: A small constant for numerical stability.
       name: Optional name for the operations created when applying gradients.
         Defaults to "Adamax".
-      **kwargs: keyword arguments. Allowed to be {`decay`}
+      **kwargs: keyword arguments. Allowed to be {`clipnorm`, `clipvalue`, `lr`,
+        `decay`}. `clipnorm` is clip gradients by norm; `clipvalue` is clip
+        gradients by value, `decay` is included for backward compatibility to
+        allow time inverse decay of learning rate. `lr` is included for backward
+        compatibility, recommended to use `learning_rate` instead.
     """
-    # pylint: disable=useless-super-delegation
-    super(Adamax, self).__init__(
-        learning_rate=learning_rate,
-        beta_1=beta_1,
-        beta_2=beta_2,
-        epsilon=epsilon,
-        amsgrad=False,
-        name=name,
-        **kwargs)
-    # pylint: enable=useless-super-delegation
+    super(Adamax, self).__init__(name, **kwargs)
+    self._set_hyper('learning_rate', kwargs.get('lr', learning_rate))
+    self._set_hyper('decay', self._initial_decay)
+    self._set_hyper('beta_1', beta_1)
+    self._set_hyper('beta_2', beta_2)
+    self.epsilon = epsilon or backend_config.epsilon()
+
+  def _create_slots(self, var_list):
+    # Separate for-loops to respect the ordering of slot variables from v1.
+    for var in var_list:
+      self.add_slot(var, 'm')  # Create slots for the first moments.
+    for var in var_list:
+      self.add_slot(var, 'v')  # Create slots for the second moments.
 
   def _resource_apply_dense(self, grad, var):
     var_dtype = var.dtype.base_dtype
@@ -120,7 +127,7 @@ class Adamax(adam.Adam):
         lr_t,
         beta_1_t,
         beta_2_t,
-        self._get_hyper('epsilon', var_dtype),
+        ops.convert_to_tensor(self.epsilon, var_dtype),
         grad,
         use_locking=self._use_locking)
 
@@ -132,7 +139,7 @@ class Adamax(adam.Adam):
     beta_2_t = self._get_hyper('beta_2', var_dtype)
     local_step = math_ops.cast(self.iterations + 1, var_dtype)
     beta_1_power = math_ops.pow(beta_1_t, local_step)
-    epsilon_t = self._get_hyper('epsilon', var_dtype)
+    epsilon_t = ops.convert_to_tensor(self.epsilon, var_dtype)
 
     # m_t = beta1 * m + (1 - beta1) * g_t
     m = self.get_slot(var, 'm')
@@ -154,8 +161,13 @@ class Adamax(adam.Adam):
       var_update = self._resource_scatter_add(var, indices, var_slice)
     return control_flow_ops.group(*[var_update, m_t, v_t])
 
-  def _resource_scatter_update(self, x, i, v):
-    with ops.control_dependencies(
-        [resource_variable_ops.resource_scatter_update(
-            x.handle, i, v)]):
-      return x.value()
+  def get_config(self):
+    config = super(Adamax, self).get_config()
+    config.update({
+        'learning_rate': self._serialize_hyperparameter('learning_rate'),
+        'decay': self._serialize_hyperparameter('decay'),
+        'beta_1': self._serialize_hyperparameter('beta_1'),
+        'beta_2': self._serialize_hyperparameter('beta_2'),
+        'epsilon': self.epsilon,
+    })
+    return config

@@ -20,8 +20,9 @@ limitations under the License.
 
 #include "tensorflow/lite/allocation.h"
 #include "tensorflow/lite/c/c_api_internal.h"
+#include "tensorflow/lite/core/api/profiler.h"
+#include "tensorflow/lite/delegates/nnapi/nnapi_delegate.h"
 #include "tensorflow/lite/memory_planner.h"
-#include "tensorflow/lite/profiling/profiler.h"
 #include "tensorflow/lite/util.h"
 
 namespace tflite {
@@ -59,6 +60,11 @@ class Subgraph {
   // interpreter.
   TfLiteStatus SetVariables(std::vector<int> variables);
 
+  // Ensure the internal node storage memory allocates at least `count`
+  // spots for node. NOTE, this doesn't actually add operators. This is an
+  // efficiency optimization that is subject to change.
+  void ReserveNodes(int count);
+
   // Adds a node with the given parameters and returns the index of the new
   // node in `node_index` (optionally). Interpreter will take ownership of
   // `builtin_data` and destroy it with `free`. Ownership of 'init_data'
@@ -68,29 +74,48 @@ class Subgraph {
                                      const char* init_data,
                                      size_t init_data_size, void* builtin_data,
                                      const TfLiteRegistration* registration,
-                                     int* node_index);
+                                     int* node_index = nullptr);
 
   // Adds `tensors_to_add` tensors, preserving pre-existing Tensor entries.
   // The value pointed to by `first_new_tensor_index` will be set to the
   // index of the first new tensor if `first_new_tensor_index` is non-null.
-  TfLiteStatus AddTensors(int tensors_to_add, int* first_new_tensor_index);
+  TfLiteStatus AddTensors(int tensors_to_add,
+                          int* first_new_tensor_index = nullptr);
 
   // Set description of inputs/outputs/data/fptrs for node `node_index`.
   // This variant assumes an external buffer has been allocated of size
   // bytes. The lifetime of buffer must be ensured to be greater or equal
-  // to Interpreter.
+  // to Interpreter. `quantization` ownership is passed to the subgraph.
+  inline TfLiteStatus SetTensorParametersReadOnly(
+      int tensor_index, TfLiteType type, const char* name,
+      const std::vector<int>& dims, TfLiteQuantization quantization,
+      const char* buffer, size_t bytes,
+      const Allocation* allocation = nullptr) {
+    return SetTensorParametersReadOnly(tensor_index, type, name, dims.size(),
+                                       dims.data(), quantization, buffer, bytes,
+                                       allocation);
+  }
   TfLiteStatus SetTensorParametersReadOnly(
       int tensor_index, TfLiteType type, const char* name, const size_t rank,
-      const int* dims, TfLiteQuantizationParams quantization,
-      const char* buffer, size_t bytes, const Allocation* allocation);
+      const int* dims, TfLiteQuantization quantization, const char* buffer,
+      size_t bytes, const Allocation* allocation = nullptr);
 
   // Set description of inputs/outputs/data/fptrs for node `node_index`.
   // This variant assumes an external buffer has been allocated of size
   // bytes. The lifetime of buffer must be ensured to be greater or equal
-  // to Interpreter.
-  TfLiteStatus SetTensorParametersReadWrite(
-      int tensor_index, TfLiteType type, const char* name, const size_t rank,
-      const int* dims, TfLiteQuantizationParams quantization, bool is_variable);
+  // to Interpreter. `quantization` ownership is passed to the subgraph.
+  inline TfLiteStatus SetTensorParametersReadWrite(
+      int tensor_index, TfLiteType type, const char* name,
+      const std::vector<int>& dims, TfLiteQuantization quantization,
+      bool is_variable = false) {
+    return SetTensorParametersReadWrite(tensor_index, type, name, dims.size(),
+                                        dims.data(), quantization, is_variable);
+  }
+  TfLiteStatus SetTensorParametersReadWrite(int tensor_index, TfLiteType type,
+                                            const char* name, const size_t rank,
+                                            const int* dims,
+                                            TfLiteQuantization quantization,
+                                            bool is_variable = false);
 
   // WARNING: Experimental interface, subject to change
   // Overrides execution plan. This bounds checks indices sent in.
@@ -139,10 +164,10 @@ class Subgraph {
   // Return the number of ops in the model.
   size_t nodes_size() const { return nodes_and_registration_.size(); }
 
-  // Read only access to list of variable tensors.
+  // Return vector of node indices in the order of execution.
   std::vector<int>& execution_plan() { return execution_plan_; }
 
-  // Read only access to list of variable tensors.
+  // Return read-only vector of node indices in the order of execution.
   const std::vector<int>& execution_plan() const { return execution_plan_; }
 
   // Mutable form of tensors (TEMPORARY for refactor).
@@ -208,6 +233,15 @@ class Subgraph {
     return context_->allow_fp32_relax_to_fp16;
   }
 
+  // Sets the cancellation function pointer in order to cancel a request in the
+  // middle of a call to Invoke(). The interpreter queries this function during
+  // inference, between op invocations; when it returns true, the interpreter
+  // will abort execution and return `kTfLiteError`. The `data` parameter
+  // contains any data used by the cancellation function, and if non-null,
+  // remains owned by the caller.
+  // WARNING: This is an experimental API and subject to change.
+  void SetCancellationFunction(void* data, bool (*check_cancelled_func)(void*));
+
   // Ensure the data in `tensor.data` is readable. In case delegate is used,
   // it might require to copy the data from delegate buffer to raw memory.
   // WARNING: This is an experimental API and subject to change.
@@ -242,9 +276,12 @@ class Subgraph {
   // WARNING: This is an experimental API and subject to change.
   TfLiteStatus ResetVariableTensors();
 
-  void SetProfiler(profiling::Profiler* profiler) { profiler_ = profiler; }
+  void SetProfiler(Profiler* profiler) {
+    profiler_ = profiler;
+    context_->profiler = profiler;
+  }
 
-  profiling::Profiler* GetProfiler() { return profiler_; }
+  Profiler* GetProfiler() { return profiler_; }
 
   // Returns a pointer to vector of subgraphs.
   // WARNING: This is an experimental API and subject to change.
@@ -390,6 +427,10 @@ class Subgraph {
   // Allow a delegate to look at the graph and modify the graph to handle
   // parts of the graph themselves. After this is called, the graph may
   // contain new nodes that replace 1 more nodes.
+  // NOTE: If tensors were allocated prior to delegate application, they will
+  // be reallocated if the graph was modified (i.e., the caller does *not* need
+  // to explicitly call |AllocateTensors()| again). If tensors were unallocated,
+  // they will remain unallocated after delegate application.
   // WARNING: This is an experimental API and subject to change.
   TfLiteStatus ModifyGraphWithDelegate(TfLiteDelegate* delegate);
 
@@ -471,8 +512,9 @@ class Subgraph {
   // TODO(aselle): replace execution_plan_ with this.
   std::unique_ptr<TfLiteIntArray, TfLiteIntArrayDeleter> plan_cache_;
 
-  // Whether to delegate to NN API
-  std::unique_ptr<NNAPIDelegate> nnapi_delegate_;
+  // Whether to use delegate to modify the graph.
+  bool should_apply_nnapi_delegate_ = false;
+  bool applied_nnapi_delegate_ = false;
 
   std::unique_ptr<MemoryPlanner> memory_planner_;
 
@@ -485,7 +527,7 @@ class Subgraph {
   TfLiteExternalContext** external_contexts_;
 
   // Profiler for this interpreter instance.
-  profiling::Profiler* profiler_ = nullptr;
+  Profiler* profiler_ = nullptr;
 
   // A pointer to vector of subgraphs. The vector is owned by the interpreter.
   std::vector<std::unique_ptr<Subgraph>>* subgraphs_ = nullptr;
@@ -495,6 +537,15 @@ class Subgraph {
   // public function).
   // The value is invalid before `PrepareOpStartingAt` is called.
   bool has_dynamic_tensors_ = true;
+
+  // Reference to cancellation function that can cancel a request in the middle
+  // of a call to Invoke(). When this function returns True, a kTfLiteError is
+  // thrown by Invoke().
+  bool (*check_cancelled_func_)(void*) = nullptr;
+
+  // Reference to data used by the cancellation function in
+  // `check_cancelled_func_`.
+  void* cancellation_data_ = nullptr;
 };
 
 }  // namespace tflite

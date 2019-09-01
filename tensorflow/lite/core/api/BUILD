@@ -17,6 +17,7 @@ cc_library(
         "error_reporter.h",
         "flatbuffer_conversions.h",
         "op_resolver.h",
+        "profiler.h",
     ],
     copts = tflite_copts(),
     deps = [
@@ -51,6 +52,7 @@ cc_test(
     srcs = ["flatbuffer_conversions_test.cc"],
     deps = [
         ":api",
+        "//tensorflow/lite:string",
         "//tensorflow/lite/c:c_api_internal",
         "@com_google_googletest//:gtest",
     ],

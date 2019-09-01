@@ -65,8 +65,10 @@ std::set<string> GetOpsFormatSupported() {
       "DepthwiseConv2dNativeBackpropFilter",
       "FusedBatchNorm",
       "FusedBatchNormV2",
+      "FusedBatchNormV3",
       "FusedBatchNormGrad",
       "FusedBatchNormGradV2",
+      "FusedBatchNormGradV3",
       "FusedConv2DBiasActivation",
       "MaxPool",
       "MaxPoolV2",
@@ -503,6 +505,7 @@ class NodeProcessor : public GraphProcessor {
       UpdateAttrKSize();
       UpdateAttrStrides();
       UpdateAttrDilations();
+      UpdateAttrExplicitPaddings();
       UpdateAttrShape();
       TF_RETURN_IF_ERROR(AddLayoutTransposeToInputs());
       TF_RETURN_IF_ERROR(AddLayoutTransposeToOutputs());
@@ -750,6 +753,28 @@ class NodeProcessor : public GraphProcessor {
     if (node_->attr().find("dilations") != node_->attr().end()) {
       auto list = node_->mutable_attr()->at("dilations").mutable_list();
       UpdateTuple(list);
+    }
+  }
+
+  void UpdateAttrExplicitPaddings() {
+    if (node_->attr().find("explicit_paddings") != node_->attr().end()) {
+      auto list = node_->mutable_attr()->at("explicit_paddings").mutable_list();
+      int size = list->i_size();
+      if (size == 8) {
+        int64 height_before = list->i(2);
+        int64 height_after = list->i(3);
+        int64 width_before = list->i(4);
+        int64 width_after = list->i(5);
+        list->set_i(2, 0);
+        list->set_i(3, 0);
+        list->set_i(4, height_before);
+        list->set_i(5, height_after);
+        list->set_i(6, width_before);
+        list->set_i(7, width_after);
+      } else if (size != 0) {
+        LOG(ERROR) << "Cannot handle explicit_paddings attribute of size "
+                   << size;
+      }
     }
   }
 
@@ -2025,8 +2050,10 @@ class DataLayoutOptimizer : GraphProcessor {
     // only needs to be performed if at least one node in the previous pass is
     // expanded.
     if (graph_->node_size() > node_size_original) {
-      NodeDef* n = AddNodePermNHWCToNCHW();
-      n = AddNodePermNCHWToNHWC();
+      // Create Const nodes holding the permutation used by added Transposes of
+      // nodes not in a frame.
+      AddNodePermNHWCToNCHW();
+      AddNodePermNCHWToNHWC();
       std::set<string> ops_format_agnostic = GetOpsFormatAgnostic();
       for (int i = 0; i < graph_->node_size(); i++) {
         if (ops_format_agnostic.find(graph_->node(i).op()) !=
@@ -2173,35 +2200,26 @@ Status LayoutOptimizer::Tune(const GrapplerItem& item,
 Status LayoutOptimizer::Optimize(Cluster* cluster, const GrapplerItem& item,
                                  GraphDef* output) {
   if (cluster == nullptr) {
-    return errors::InvalidArgument("cluster == nullptr");
+    LOG(WARNING) << "layout optimizer was called with cluster == nullptr";
+    return errors::Aborted("cluster == nullptr.");
   }
-
   if (GetNumGPUs(*cluster) < 1) {
-    // LayoutOptimizer is currently only tuned for GPU.
-    *output = item.graph;
-    return Status::OK();
+    return errors::Aborted(
+        "No GPUs found: LayoutOptimizer is currently only tuned for GPU.");
   }
 
-  virtual_placer_.reset(new VirtualPlacer(cluster));
-  nodes_to_preserve_ = item.NodesToPreserve();
   GraphProperties graph_properties(item);
-  auto status = graph_properties.InferStatically(false);
-  if (!status.ok()) {
-    VLOG(1) << "Infer shape return status: " << status.ToString();
-    *output = item.graph;
-    return status;
-  }
+  TF_RETURN_IF_ERROR(graph_properties.InferStatically(false));
   GRAPPLER_RETURN_IF_DEADLINE_EXCEEDED();
+
+  virtual_placer_.reset(new VirtualPlacer(cluster->GetDevices()));
+  nodes_to_preserve_ = item.NodesToPreserve();
 
   TuningConfig config;
   config.no_gemm = true;
   // TODO(yaozhang): Enable tuning with various TuningConfig choices with
   // the measurement-based estimator.
-  status = Tune(item, graph_properties, config, output);
-  if (!status.ok()) {
-    *output = item.graph;
-  }
-  return status;
+  return Tune(item, graph_properties, config, output);
 }
 
 void LayoutOptimizer::Feedback(Cluster* cluster, const GrapplerItem& item,

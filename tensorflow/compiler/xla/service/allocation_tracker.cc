@@ -20,13 +20,13 @@ limitations under the License.
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
 #include "tensorflow/compiler/xla/map_util.h"
-#include "tensorflow/compiler/xla/service/device_memory_allocator.h"
 #include "tensorflow/compiler/xla/service/transfer_manager.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/status_macros.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/util.h"
 #include "tensorflow/core/platform/logging.h"
+#include "tensorflow/stream_executor/device_memory_allocator.h"
 
 namespace xla {
 
@@ -142,13 +142,13 @@ StatusOr<std::vector<GlobalDataHandle>> AllocationTracker::DeconstructTuple(
   // We only need to care about replica id 0 here, since the GlobalDataHandle is
   // the same for all buffers across replicas.
   const ShapedBuffer* shaped_buffer = replicated_buffers[0];
-  if (!ShapeUtil::IsTuple(shaped_buffer->on_host_shape())) {
+  if (!shaped_buffer->on_host_shape().IsTuple()) {
     return InvalidArgument("global data handle %d is not a tuple",
                            data.handle());
   }
   // If the on-host representation is a tuple, then the on-device one should be
   // as well.
-  TF_RET_CHECK(ShapeUtil::IsTuple(shaped_buffer->on_device_shape()));
+  TF_RET_CHECK(shaped_buffer->on_device_shape().IsTuple());
 
   if (ShapeUtil::IsNestedTuple(shaped_buffer->on_device_shape())) {
     return Unimplemented("Deconstructing nested tuples is not implemented.");
@@ -221,8 +221,8 @@ void AllocationTracker::AddAllocationOrIncrementRefCount(
   auto it = allocation_map.find(device_memory.opaque());
   if (it == allocation_map.end()) {
     allocation_map[device_memory.opaque()] = {
-        OwningDeviceMemory(device_memory, device_ordinal,
-                           backend_->memory_allocator()),
+        se::OwningDeviceMemory(device_memory, device_ordinal,
+                               backend_->memory_allocator()),
         /*ref_count=*/1};
   } else {
     it->second.ref_count++;

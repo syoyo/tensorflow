@@ -40,6 +40,7 @@ py_library(
 py_test(
     name = "print_model_analysis_test",
     srcs = ["print_model_analysis_test.py"],
+    python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [
         "//tensorflow/core/profiler:protos_all_py",
@@ -69,4 +70,5 @@ cuda_py_test(
     tags = [
         "no_pip",
     ],
+    xla_enable_strict_auto_jit = False,  # Node names are different with autojit
 )

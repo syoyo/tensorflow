@@ -24,15 +24,10 @@ from __future__ import print_function
 
 import datetime
 
-from tensorflow.python import tf2
-from tensorflow.python.framework import ops
-from tensorflow.python.framework import tensor_shape
-from tensorflow.python.ops import variable_scope
-
 from tensorflow.python.util import tf_contextlib
 from tensorflow.python.util.tf_export import tf_export
 
-_FORWARD_COMPATIBILITY_HORIZON = datetime.date(2018, 12, 13)
+_FORWARD_COMPATIBILITY_HORIZON = datetime.date(2019, 11, 1)
 
 
 @tf_export("compat.forward_compatible")
@@ -81,9 +76,10 @@ def forward_compatible(year, month, day):
   the code that adds the new operation is committed.
 
   Args:
-    year:  A year (e.g., 2018).
-    month: A month (1 <= month <= 12) in year.
-    day:   A day (1 <= day <= 31, or 30, or 29, or 28) in month.
+    year:  A year (e.g., 2018). Must be an `int`.
+    month: A month (1 <= month <= 12) in year. Must be an `int`.
+    day:   A day (1 <= day <= 31, or 30, or 29, or 28) in month. Must be an
+           `int`.
 
   Returns:
     True if the caller can expect that serialized TensorFlow graphs produced
@@ -123,10 +119,11 @@ def forward_compatibility_horizon(year, month, day):
        # Test that generate_graph_with_new_features() has an effect
   ```
 
-  Args :
-    year:  A year (e.g. 2018).
-    month: A month (1 <= month <= 12) in year.
-    day:   A day (1 <= day <= 31, or 30, or 29, or 28) in month.
+  Args:
+    year:  A year (e.g., 2018). Must be an `int`.
+    month: A month (1 <= month <= 12) in year. Must be an `int`.
+    day:   A day (1 <= day <= 31, or 30, or 29, or 28) in month. Must be an
+           `int`.
 
   Yields:
     Nothing.
@@ -138,40 +135,3 @@ def forward_compatibility_horizon(year, month, day):
     yield
   finally:
     _FORWARD_COMPATIBILITY_HORIZON = old_compat_date
-
-
-@tf_export(v1=["enable_v2_behavior"])
-def enable_v2_behavior():
-  """Enables TensorFlow 2.x behaviors.
-
-  This function can be called at the beginning of the program (before `Tensors`,
-  `Graphs` or other structures have been created, and before devices have been
-  initialized. It switches all global behaviors that are different between
-  TensorFlow 1.x and 2.x to behave as intended for 2.x.
-
-  This function is called in the main TensorFlow `__init__.py` file, user should
-  not need to call it, except during complex migrations.
-  """
-  tf2.enable()  # Switches TensorArrayV2 and control flow V2
-  ops.enable_eager_execution()
-  tensor_shape.enable_v2_tensorshape()  # Also switched by tf2
-  variable_scope.enable_resource_variables()
-
-
-@tf_export(v1=["disable_v2_behavior"])
-def disable_v2_behavior():
-  """Disables TensorFlow 2.x behaviors.
-
-  This function can be called at the beginning of the program (before `Tensors`,
-  `Graphs` or other structures have been created, and before devices have been
-  initialized. It switches all global behaviors that are different between
-  TensorFlow 1.x and 2.x to behave as intended for 1.x.
-
-  User can call this function to disable 2.x behavior during complex migrations.
-  """
-  tf2.disable()  # Switches TensorArrayV2 and control flow V2
-  ops.disable_eager_execution()
-  tensor_shape.disable_v2_tensorshape()  # Also switched by tf2
-  variable_scope.disable_resource_variables()
-
-

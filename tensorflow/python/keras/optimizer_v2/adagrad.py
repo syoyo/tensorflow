@@ -21,16 +21,17 @@ from __future__ import print_function
 import numpy as np
 
 from tensorflow.python.framework import ops
+from tensorflow.python.keras import backend_config
 from tensorflow.python.keras.optimizer_v2 import optimizer_v2
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import resource_variable_ops
 from tensorflow.python.ops import state_ops
-from tensorflow.python.util.tf_export import tf_export
+from tensorflow.python.util.tf_export import keras_export
 
 
-@tf_export('keras.optimizers.Adagrad', v1=[])
+@keras_export('keras.optimizers.Adagrad')
 class Adagrad(optimizer_v2.OptimizerV2):
   r"""Optimizer that implements the Adagrad algorithm.
 
@@ -40,18 +41,18 @@ class Adagrad(optimizer_v2.OptimizerV2):
   the smaller the updates.
 
   Initialization:
+  $$accum_{g_0} := \text{initial_accumulator_value}$$
 
-  $$accum_g_0 := initial_accumulator_value$$
-
+  Update step:
   $$t := t + 1$$
-  $$accum_g_t := accum_g_{t-1} + g * g$$
-  $$theta_t := theta_{t-1} - lr * g / (\sqrt{accum_g_t} + \epsilon)$$
+  $$accum_{g_t} := accum_{g_{t-1}} + g^2$$
+  $$\theta_t := \theta_{t-1} - lr * g / (\sqrt{accum_{g_t}} + \epsilon)$$
 
-  References
-    See [paper]
-      (http://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf)
-    or this
-      [intro](https://ppasupat.github.io/a9online/uploads/proximal_notes.pdf).
+  References:
+
+  * [Paper](http://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf).
+  * [Introduction]
+    (https://ppasupat.github.io/a9online/uploads/proximal_notes.pdf).
   """
 
   def __init__(self,
@@ -70,7 +71,11 @@ class Adagrad(optimizer_v2.OptimizerV2):
         Starting value for the accumulators, must be positive.
       name: Optional name prefix for the operations created when applying
         gradients.  Defaults to "Adagrad".
-      **kwargs: keyword arguments. Allowed to be {`decay`}
+      **kwargs: keyword arguments. Allowed to be {`clipnorm`, `clipvalue`, `lr`,
+        `decay`}. `clipnorm` is clip gradients by norm; `clipvalue` is clip
+        gradients by value, `decay` is included for backward compatibility to
+        allow time inverse decay of learning rate. `lr` is included for backward
+        compatibility, recommended to use `learning_rate` instead.
 
     Raises:
       ValueError: If the `initial_accumulator_value` or `epsilon` is invalid.
@@ -85,13 +90,13 @@ class Adagrad(optimizer_v2.OptimizerV2):
     if initial_accumulator_value < 0.0:
       raise ValueError('initial_accumulator_value must be non-negative: %s' %
                        initial_accumulator_value)
-    if epsilon < 1e-7:
-      raise ValueError('epsilon must be larger than 1e-7: %s' % epsilon)
+    if epsilon is None:
+      epsilon = backend_config.epsilon()
     super(Adagrad, self).__init__(name, **kwargs)
     self._set_hyper('learning_rate', kwargs.get('lr', learning_rate))
     self._set_hyper('decay', self._initial_decay)
     self._initial_accumulator_value = initial_accumulator_value
-    self._set_hyper('epsilon', epsilon)
+    self.epsilon = epsilon or backend_config.epsilon()
 
   def _create_slots(self, var_list):
     for var in var_list:
@@ -135,13 +140,13 @@ class Adagrad(optimizer_v2.OptimizerV2):
   def _resource_apply_dense(self, grad, var):
     var_dtype = var.dtype.base_dtype
     lr_t = self._decayed_lr(var_dtype)
-    epsilon = self._get_hyper('epsilon', var_dtype)
+    epsilon_t = ops.convert_to_tensor(self.epsilon, var_dtype)
     acc = self.get_slot(var, 'accumulator')
 
     acc_t = state_ops.assign_add(
         acc, math_ops.square(grad), use_locking=self._use_locking)
     var_update = state_ops.assign_sub(
-        var, lr_t * grad / (math_ops.sqrt(acc_t) + epsilon))
+        var, lr_t * grad / (math_ops.sqrt(acc_t) + epsilon_t))
     return var_update
 
   def _resource_apply_sparse(self, grad, var, indices):
@@ -153,13 +158,13 @@ class Adagrad(optimizer_v2.OptimizerV2):
 
     var_dtype = var.dtype.base_dtype
     lr_t = self._decayed_lr(var_dtype)
-    epsilon = self._get_hyper('epsilon', var_dtype)
+    epsilon_t = ops.convert_to_tensor(self.epsilon, var_dtype)
     acc = self.get_slot(var, 'accumulator')
 
     acc_t = _resource_scatter_add(acc, indices, math_ops.square(grad))
     acc_t_slice = array_ops.gather(acc_t, indices)
     var_update = _resource_scatter_add(
-        var, indices, -lr_t * grad / (math_ops.sqrt(acc_t_slice) + epsilon))
+        var, indices, -lr_t * grad / (math_ops.sqrt(acc_t_slice) + epsilon_t))
     return var_update
 
   def get_config(self):
@@ -168,6 +173,6 @@ class Adagrad(optimizer_v2.OptimizerV2):
         'learning_rate': self._serialize_hyperparameter('learning_rate'),
         'decay': self._serialize_hyperparameter('decay'),
         'initial_accumulator_value': self._initial_accumulator_value,
-        'epsilon': self._serialize_hyperparameter('epsilon'),
+        'epsilon': self.epsilon,
     })
     return config

@@ -103,11 +103,21 @@ class DfsHloVisitorBase {
   virtual Status HandlePower(HloInstructionPtr hlo) {
     return HandleElementwiseBinary(hlo);
   }
+  virtual Status HandleSqrt(HloInstructionPtr hlo) {
+    return HandleElementwiseUnary(hlo);
+  }
+  virtual Status HandleRsqrt(HloInstructionPtr hlo) {
+    return HandleElementwiseUnary(hlo);
+  }
   virtual Status HandleConvolution(HloInstructionPtr hlo) = 0;
   virtual Status HandleFft(HloInstructionPtr fft) = 0;
-  virtual Status HandleCrossReplicaSum(HloInstructionPtr hlo) = 0;
+  virtual Status HandleTriangularSolve(HloInstructionPtr hlo) = 0;
+  virtual Status HandleCholesky(HloInstructionPtr hlo) = 0;
+  virtual Status HandleAllReduce(HloInstructionPtr hlo) = 0;
   virtual Status HandleAllToAll(HloInstructionPtr hlo) = 0;
   virtual Status HandleCollectivePermute(HloInstructionPtr hlo) = 0;
+  virtual Status HandleReplicaId(HloInstructionPtr hlo) = 0;
+  virtual Status HandlePartitionId(HloInstructionPtr hlo) = 0;
   virtual Status HandleGetDimensionSize(HloInstructionPtr hlo) = 0;
   virtual Status HandleCompare(HloInstructionPtr hlo) {
     return HandleElementwiseBinary(hlo);
@@ -189,6 +199,9 @@ class DfsHloVisitorBase {
   }
   virtual Status HandleXor(HloInstructionPtr hlo) {
     return HandleElementwiseBinary(hlo);
+  }
+  virtual Status HandlePopulationCount(HloInstructionPtr hlo) {
+    return HandleElementwiseUnary(hlo);
   }
   virtual Status HandleShiftLeft(HloInstructionPtr hlo) {
     return HandleElementwiseBinary(hlo);
@@ -279,6 +292,7 @@ class DfsHloVisitorBase {
   // This call is purely a performance hint and can be omitted without
   // affecting correctness.
   void ReserveVisitStates(int num) { visit_state_.reserve(num); }
+  size_t VisitStateCapacity() const { return visit_state_.capacity(); }
 
   // Useful when we want to visit the same computation more than once with the
   // same visitor.

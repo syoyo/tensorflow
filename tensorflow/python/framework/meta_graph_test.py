@@ -289,6 +289,28 @@ class SimpleMetaGraphTest(test.TestCase):
       # A single instance of Variable is shared among the collections:
       self.assertIs(global_vars[0], trainable_vars[0])
 
+  @test_util.run_deprecated_v1
+  def testMetricVariablesCollectionLoadsBytesList(self):
+    with ops.Graph().as_default() as graph1:
+      v1 = variables.Variable(
+          [1, 2, 3], shape=[3], dtype=dtypes.float64, name="v")
+
+    orig_meta_graph, _ = meta_graph.export_scoped_meta_graph(graph=graph1)
+
+    # Copy bytes list from global variables collection to metric variables.
+    orig_meta_graph.collection_def[ops.GraphKeys.METRIC_VARIABLES].CopyFrom(
+        orig_meta_graph.collection_def["variables"])
+
+    with ops.Graph().as_default() as graph2:
+      meta_graph.import_scoped_meta_graph(orig_meta_graph)
+      var_list = graph2.get_collection(ops.GraphKeys.METRIC_VARIABLES)
+      self.assertEqual(len(var_list), 1)
+      v2 = var_list[0]
+      self.assertIsInstance(v2, variables.Variable)
+      self.assertEqual(v1.name, v2.name)
+      self.assertEqual(v1.dtype, v2.dtype)
+      self.assertEqual(v1.shape, v2.shape)
+
 
 class ScopedMetaGraphTest(test.TestCase):
 
@@ -706,6 +728,26 @@ class ScopedMetaGraphTest(test.TestCase):
         test_dir, "exported_queue1.pbtxt", "exported_new_queue1.pbtxt")
     test_util.assert_meta_graph_protos_equal(self, orig_meta_graph,
                                              new_meta_graph)
+
+  def testExportDebugInfo(self):
+    graph1 = ops.Graph()
+    with graph1.as_default():
+      with ops.name_scope("hidden1/hidden2/hidden3"):
+        images = constant_op.constant(
+            1.0, dtypes.float32, shape=[3, 2], name="images")
+        weights1 = variables.Variable([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+                                      name="weights")
+        biases1 = resource_variable_ops.ResourceVariable(
+            [0.1] * 3, name="biases")
+        nn_ops.relu(math_ops.matmul(images, weights1) + biases1, name="relu")
+    debug_info_def = meta_graph.create_graph_debug_info_def(
+        operations=graph1.get_operations())
+
+    # The unique file names in all the stack traces should be larger or equal
+    # than 1.
+    self.assertTrue(len(debug_info_def.files) >= 1)
+    # All the nodes from the exported graphdef are included.
+    self.assertEqual(len(debug_info_def.traces), len(graph1.get_operations()))
 
   # Verifies that we can export a subgraph in a nested name scope containing a
   # "hidden1/hidden2" and import it into "new_hidden1/new_hidden2" in a new

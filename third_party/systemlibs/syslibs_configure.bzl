@@ -21,10 +21,12 @@ VALID_LIBS = [
     "curl",
     "cython",
     "double_conversion",
+    "enum34_archive",
     "flatbuffers",
     "gast_archive",
     "gif_archive",
     "grpc",
+    "hwloc",
     "icu",
     "jpeg",
     "jsoncpp_git",
@@ -33,6 +35,7 @@ VALID_LIBS = [
     "nasm",
     "nsync",
     "org_sqlite",
+    "pasta",
     "pcre",
     "png_archive",
     "protobuf_archive",
@@ -40,6 +43,7 @@ VALID_LIBS = [
     "snappy",
     "swig",
     "termcolor_archive",
+    "wrapt",
     "zlib_archive",
 ]
 

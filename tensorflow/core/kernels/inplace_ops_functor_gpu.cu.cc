@@ -19,7 +19,7 @@ limitations under the License.
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/kernels/inplace_ops_functor.h"
-#include "tensorflow/core/util/cuda_kernel_helper.h"
+#include "tensorflow/core/util/gpu_kernel_helper.h"
 
 namespace tensorflow {
 namespace functor {
@@ -43,15 +43,15 @@ template <typename T>
 Status DoParallelConcatUpdate(const Device& d, const Tensor& value, int32 loc,
                               Tensor* output) {
   const int64 nelem = value.NumElements();
-  CudaLaunchConfig cfg = GetCudaLaunchConfig(nelem, d);
+  GpuLaunchConfig cfg = GetCudaLaunchConfig(nelem, d);
   auto Toutput = output->flat_outer_dims<T>();
   const int64 nrows = Toutput.dimension(0);
   const int64 ncols = Toutput.dimension(1);
   const T* src = value.flat<T>().data();
   T* dst = output->flat<T>().data();
-  DoParallelConcatOpKernel<T>
-      <<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
-          cfg.virtual_thread_count, nrows, ncols, loc, src, dst);
+  TF_CHECK_OK(CudaLaunchKernel(
+      DoParallelConcatOpKernel<T>, cfg.block_count, cfg.thread_per_block, 0,
+      d.stream(), cfg.virtual_thread_count, nrows, ncols, loc, src, dst));
   return Status::OK();
 }
 
@@ -106,7 +106,7 @@ template <typename T>
 void DoInplaceOp(const Device& d, InplaceOpType op, const Tensor& i,
                  const Tensor& v, Tensor* y) {
   const int64 nelem = v.NumElements();
-  CudaLaunchConfig cfg = GetCudaLaunchConfig(nelem, d);
+  GpuLaunchConfig cfg = GetCudaLaunchConfig(nelem, d);
   auto Ty = y->flat_outer_dims<T>();
   const int64 nrows = Ty.dimension(0);
   const int64 ncols = Ty.dimension(1);
@@ -117,19 +117,22 @@ void DoInplaceOp(const Device& d, InplaceOpType op, const Tensor& i,
   T* dst = y->flat<T>().data();
   switch (op) {
     case I_UPDATE:
-      DoInplaceOpKernel<T, I_UPDATE>
-          <<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
-              cfg.virtual_thread_count, nrows, ncols, n, src, rowids, dst);
+      TF_CHECK_OK(CudaLaunchKernel(DoInplaceOpKernel<T, I_UPDATE>,
+                                   cfg.block_count, cfg.thread_per_block, 0,
+                                   d.stream(), cfg.virtual_thread_count, nrows,
+                                   ncols, n, src, rowids, dst));
       break;
     case I_ADD:
-      DoInplaceOpKernel<T, I_ADD>
-          <<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
-              cfg.virtual_thread_count, nrows, ncols, n, src, rowids, dst);
+      TF_CHECK_OK(CudaLaunchKernel(DoInplaceOpKernel<T, I_ADD>, cfg.block_count,
+                                   cfg.thread_per_block, 0, d.stream(),
+                                   cfg.virtual_thread_count, nrows, ncols, n,
+                                   src, rowids, dst));
       break;
     case I_SUB:
-      DoInplaceOpKernel<T, I_SUB>
-          <<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
-              cfg.virtual_thread_count, nrows, ncols, n, src, rowids, dst);
+      TF_CHECK_OK(CudaLaunchKernel(DoInplaceOpKernel<T, I_SUB>, cfg.block_count,
+                                   cfg.thread_per_block, 0, d.stream(),
+                                   cfg.virtual_thread_count, nrows, ncols, n,
+                                   src, rowids, dst));
       break;
   }
 }
@@ -138,7 +141,7 @@ template <bool>
 void DoInplaceOp(const Device& d, InplaceOpType op, const Tensor& i,
                  const Tensor& v, Tensor* y) {
   const int64 nelem = v.NumElements();
-  CudaLaunchConfig cfg = GetCudaLaunchConfig(nelem, d);
+  GpuLaunchConfig cfg = GetCudaLaunchConfig(nelem, d);
   auto Ty = y->flat_outer_dims<bool>();
   const int64 nrows = Ty.dimension(0);
   const int64 ncols = Ty.dimension(1);
@@ -148,9 +151,10 @@ void DoInplaceOp(const Device& d, InplaceOpType op, const Tensor& i,
   const int32* rowids = i.flat<int32>().data();
   bool* dst = y->flat<bool>().data();
   if (op == I_UPDATE) {
-    DoInplaceOpKernel<bool, I_UPDATE>
-        <<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
-            cfg.virtual_thread_count, nrows, ncols, n, src, rowids, dst);
+    TF_CHECK_OK(CudaLaunchKernel(DoInplaceOpKernel<bool, I_UPDATE>,
+                                 cfg.block_count, cfg.thread_per_block, 0,
+                                 d.stream(), cfg.virtual_thread_count, nrows,
+                                 ncols, n, src, rowids, dst));
   }
 }
 

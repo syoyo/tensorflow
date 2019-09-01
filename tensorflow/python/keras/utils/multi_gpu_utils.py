@@ -21,7 +21,7 @@ from tensorflow.python.framework import ops
 from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.engine.training import Model
 from tensorflow.python.ops import array_ops
-from tensorflow.python.util.tf_export import tf_export
+from tensorflow.python.util.tf_export import keras_export
 
 
 def _get_available_devices():
@@ -33,7 +33,7 @@ def _normalize_device_name(name):
   return name
 
 
-@tf_export('keras.utils.multi_gpu_model')
+@keras_export('keras.utils.multi_gpu_model')
 def multi_gpu_model(model, gpus, cpu_merge=True, cpu_relocation=False):
   """Replicates a model on different GPUs.
 
@@ -219,11 +219,11 @@ def multi_gpu_model(model, gpus, cpu_merge=True, cpu_relocation=False):
   # each getting a slice of the inputs.
   for i, gpu_id in enumerate(target_gpu_ids):
     with ops.device('/gpu:%d' % gpu_id):
-      with ops.name_scope('replica_%d' % gpu_id):
+      with K.name_scope('replica_%d' % gpu_id):
         inputs = []
         # Retrieve a slice of the input.
         for x in model.inputs:
-          input_shape = tuple(x.get_shape().as_list())[1:]
+          input_shape = tuple(x.shape.as_list())[1:]
           slice_i = Lambda(
               get_slice,
               output_shape=input_shape,

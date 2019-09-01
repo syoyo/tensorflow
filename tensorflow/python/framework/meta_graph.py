@@ -19,6 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 import copy
+from distutils import version as distutils_version  # pylint: disable=g-bad-import-order
 import os.path
 import re
 
@@ -29,10 +30,12 @@ from google.protobuf import text_format
 from tensorflow.core.framework import attr_value_pb2
 from tensorflow.core.framework import graph_pb2
 from tensorflow.core.framework import op_def_pb2
+from tensorflow.core.protobuf import graph_debug_info_pb2
 from tensorflow.core.protobuf import meta_graph_pb2
 from tensorflow.core.protobuf import saver_pb2
 from tensorflow.python import pywrap_tensorflow
 from tensorflow.python.eager import context
+from tensorflow.python.framework import error_interpolation
 from tensorflow.python.framework import graph_io
 from tensorflow.python.framework import importer
 from tensorflow.python.framework import op_def_registry
@@ -49,7 +52,8 @@ _UNBOUND_INPUT_PREFIX = "$unbound_inputs_"
 # List of collections that didn't register proto functions, as a result in
 # a previously exported meta_graph the items are of a different data type.
 _COMPAT_COLLECTION_LIST = [ops.GraphKeys.LOCAL_VARIABLES,
-                           ops.GraphKeys.MODEL_VARIABLES]
+                           ops.GraphKeys.MODEL_VARIABLES,
+                           ops.GraphKeys.METRIC_VARIABLES]
 
 
 def _node_def(from_node_def, export_scope, unbound_inputs, clear_devices=False):
@@ -509,6 +513,53 @@ def strip_graph_default_valued_attrs(meta_graph_def):
   meta_graph_def.meta_info_def.stripped_default_attrs = True
 
 
+def create_graph_debug_info_def(operations):
+  """Construct and returns a `GraphDebugInfo` protocol buffer.
+
+  Args:
+    operations: An iterable of op.Operation objects having _traceback members.
+
+  Returns:
+    GraphDebugInfo protocol buffer.
+
+  Raises:
+    TypeError: If the arguments are not of the correct proto buffer type.
+  """
+  # Creates an empty GraphDebugInfoDef proto.
+  graph_debug_info_def = graph_debug_info_pb2.GraphDebugInfo()
+
+  # Gets the file names and line numbers for the exported node names. Also
+  # collects the unique file names.
+  all_file_names = set()
+  node_to_trace = {}
+  for op in operations:
+    # Gets the stack trace of the operation and then the file location.
+    node_name = op.name
+    node_to_trace[node_name] = error_interpolation.compute_useful_stack(op)
+    for trace in node_to_trace[node_name]:
+      all_file_names.add(trace[0])
+
+  # Sets the `files` field in the GraphDebugInfo proto
+  graph_debug_info_def.files.extend(all_file_names)
+
+  # Builds a mapping between file names and index of the `files` field, so we
+  # only store the indexes for the nodes in the GraphDebugInfo.
+  file_to_index = dict(
+      [(y, x) for x, y in enumerate(graph_debug_info_def.files)])
+
+  # Creates the FileLineCol proto for each node and sets the value in the
+  # GraphDebugInfo proto. We only store the file name index for each node to
+  # save the storage space.
+  for node_name, trace in node_to_trace.items():
+    trace_def = graph_debug_info_def.traces[node_name]
+    for file_name, line, func, code in trace:
+      file_index = file_to_index[file_name]
+      trace_def.file_line_cols.add(
+          file_index=file_index, line=line, func=func, code=code)
+
+  return graph_debug_info_def
+
+
 def create_meta_graph_def(meta_info_def=None,
                           graph_def=None,
                           saver_def=None,
@@ -805,9 +856,30 @@ def import_scoped_meta_graph_with_return_elements(
         producer_op_list=producer_op_list,
         return_elements=return_elements)
 
+    # TensorFlow versions before 1.9 (not inclusive) exported SavedModels
+    # without a VariableDef.trainable field set.
+    tf_version = meta_graph_def.meta_info_def.tensorflow_version
+    if not tf_version:
+      variables_have_trainable = True
+    else:
+      variables_have_trainable = (
+          distutils_version.LooseVersion(tf_version)
+          >= distutils_version.LooseVersion("1.9"))
+
+    # Sort collections so we see TRAINABLE_VARIABLES first and can default these
+    # variables to trainable if the value is not set in their VariableDef.
+    sorted_collections = []
+    if ops.GraphKeys.TRAINABLE_VARIABLES in meta_graph_def.collection_def:
+      sorted_collections.append(
+          (ops.GraphKeys.TRAINABLE_VARIABLES,
+           meta_graph_def.collection_def[ops.GraphKeys.TRAINABLE_VARIABLES]))
+    for key, value in sorted(meta_graph_def.collection_def.items()):
+      if key != ops.GraphKeys.TRAINABLE_VARIABLES:
+        sorted_collections.append((key, value))
+
     # Restores all the other collections.
     variable_objects = {}
-    for key, col_def in sorted(meta_graph_def.collection_def.items()):
+    for key, col_def in sorted_collections:
       # Don't add unbound_inputs to the new graph.
       if key == unbound_inputs_col_name:
         continue
@@ -820,6 +892,13 @@ def import_scoped_meta_graph_with_return_elements(
                       key)
         continue
       from_proto = ops.get_from_proto_function(key)
+
+      # Temporary change to allow the TFMA evaluator to read metric variables
+      # saved as a bytes list.
+      # TODO(kathywu): Remove this hack once cl/248406059 has been submitted.
+      if key == ops.GraphKeys.METRIC_VARIABLES:
+        # Metric variables will use the same proto functions as GLOBAL_VARIABLES
+        from_proto = ops.get_from_proto_function(ops.GraphKeys.GLOBAL_VARIABLES)
       if from_proto and kind == "bytes_list":
         proto_type = ops.get_collection_proto_type(key)
         if key in ops.GraphKeys._VARIABLE_COLLECTIONS:  # pylint: disable=protected-access
@@ -828,6 +907,14 @@ def import_scoped_meta_graph_with_return_elements(
             if variable is None:
               proto = proto_type()
               proto.ParseFromString(value)
+              if not variables_have_trainable:
+                # If the VariableDef proto does not contain a "trainable"
+                # property because it was exported before that property was
+                # added, we default it to whether the variable is in the
+                # TRAINABLE_VARIABLES collection. We've sorted
+                # TRAINABLE_VARIABLES to be first, so trainable variables will
+                # be created from that collection.
+                proto.trainable = (key == ops.GraphKeys.TRAINABLE_VARIABLES)
               variable = from_proto(
                   proto, import_scope=scope_to_prepend_to_names)
               variable_objects[value] = variable
@@ -881,6 +968,7 @@ def export_scoped_meta_graph(filename=None,
                              saver_def=None,
                              clear_extraneous_savers=False,
                              strip_default_attrs=False,
+                             save_debug_info=False,
                              **kwargs):
   """Returns `MetaGraphDef` proto. Optionally writes it to filename.
 
@@ -910,7 +998,10 @@ def export_scoped_meta_graph(filename=None,
         graph (both Save/Restore ops and SaverDefs) that are not associated
         with the provided SaverDef.
     strip_default_attrs: Set to true if default valued attributes must be
-        removed while exporting the GraphDef.
+      removed while exporting the GraphDef.
+    save_debug_info: If `True`, save the GraphDebugInfo to a separate file,
+      which in the same directory of filename and with `_debug` added before the
+      file extension.
     **kwargs: Optional keyed arguments, including meta_info_def and
         collection_list.
 
@@ -920,8 +1011,11 @@ def export_scoped_meta_graph(filename=None,
 
   Raises:
     ValueError: When the `GraphDef` is larger than 2GB.
+    ValueError: When executing in Eager mode and either `graph_def` or `graph`
+      is undefined.
   """
-  if context.executing_eagerly():
+  if context.executing_eagerly() and not (graph_def is not None and
+                                          graph is not None):
     raise ValueError("Exporting/importing meta graphs is not supported when "
                      "Eager Execution is enabled.")
   graph = graph or ops.get_default_graph()
@@ -1005,6 +1099,24 @@ def export_scoped_meta_graph(filename=None,
         os.path.dirname(filename),
         os.path.basename(filename),
         as_text=as_text)
+    if save_debug_info:
+      name, _ = os.path.splitext(filename)
+      debug_filename = "{name}{ext}".format(name=name, ext=".debug")
+
+      # Gets the operation from the graph by the name. Exludes variable nodes,
+      # so only the nodes in the frozen models are included.
+      ops_to_export = []
+      for node in scoped_meta_graph_def.graph_def.node:
+        scoped_op_name = ops.prepend_name_scope(node.name, export_scope)
+        ops_to_export.append(graph.get_operation_by_name(scoped_op_name))
+
+      graph_debug_info = create_graph_debug_info_def(ops_to_export)
+
+      graph_io.write_graph(
+          graph_debug_info,
+          os.path.dirname(debug_filename),
+          os.path.basename(debug_filename),
+          as_text=as_text)
 
   return scoped_meta_graph_def, var_list
 

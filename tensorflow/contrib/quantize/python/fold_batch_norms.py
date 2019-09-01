@@ -185,7 +185,7 @@ def _FindFusedBatchNorms(graph):
               graph_matcher.OpTypePattern('*')])
 
   batch_norm_pattern = graph_matcher.OpTypePattern(
-      'FusedBatchNorm',
+      'FusedBatchNorm|FusedBatchNormV3',
       inputs=[
           graph_matcher.OneofPattern(
               [matmul_reshape_pattern, layer_output_pattern]), gamma_pattern,
@@ -454,7 +454,7 @@ def _CloneWithNewOperands(layer_op, input_tensor, weight_tensor,
         strides=layer_op.get_attr('strides'),
         padding=layer_op.get_attr('padding'),
         use_cudnn_on_gpu=layer_op.get_attr('use_cudnn_on_gpu'),
-        data_format=layer_op.get_attr('data_format'),
+        data_format=layer_op.get_attr('data_format').decode(),
         name=new_layer_name)
   elif layer_op.type == 'MatMul':
     return math_ops.matmul(
@@ -489,8 +489,14 @@ def _CloneWithNewOperands(layer_op, input_tensor, weight_tensor,
 
 
 @ops.RegisterGradient('FoldFusedBatchNormGrad')
-def _FoldFusedBatchNormGrad(op, unused_grad_y, grad_mean, grad_var, unused_1,
-                            unused_2):
+def _FoldFusedBatchNormGrad(op,
+                            unused_grad_y,
+                            grad_mean,
+                            grad_var,
+                            unused_1,
+                            unused_2,
+                            unused_3=None):
+  """Gradient function for the FusedBatchNorm ops matched by _GetLayerMatch."""
   x = op.inputs[0]
   n = math_ops.cast(
       array_ops.size(x) / array_ops.size(grad_mean), dtypes.float32)
@@ -867,7 +873,7 @@ class _OpCloner(object):
         strides=op.get_attr('strides'),
         padding=op.get_attr('padding'),
         use_cudnn_on_gpu=op.get_attr('use_cudnn_on_gpu'),
-        data_format=op.get_attr('data_format'),
+        data_format=op.get_attr('data_format').decode(),
         name=new_name).op
 
   def _CloneDepthwiseConv2d(self, op, inputs, new_name):

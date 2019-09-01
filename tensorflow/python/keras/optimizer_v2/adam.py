@@ -18,32 +18,30 @@ from __future__ import division
 from __future__ import print_function
 
 from tensorflow.python.framework import ops
+from tensorflow.python.keras import backend_config
 from tensorflow.python.keras.optimizer_v2 import optimizer_v2
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import resource_variable_ops
 from tensorflow.python.ops import state_ops
 from tensorflow.python.training import training_ops
-from tensorflow.python.util.tf_export import tf_export
+from tensorflow.python.util.tf_export import keras_export
 
 
-@tf_export('keras.optimizers.Adam', v1=[])
+@keras_export('keras.optimizers.Adam')
 class Adam(optimizer_v2.OptimizerV2):
   """Optimizer that implements the Adam algorithm.
 
   Adam optimization is a stochastic gradient descent method that is based on
-  adaptive estimation of first-order and second-order moments. According to the
-  reference, the method is 'computationally efficient, has little memory
+  adaptive estimation of first-order and second-order moments.
+  According to the paper
+  [Adam: A Method for Stochastic Optimization. Kingma et al.,
+  2014](http://arxiv.org/abs/1412.6980),
+   the method is "*computationally efficient, has little memory
   requirement, invariant to diagonal rescaling of gradients, and is well suited
-  for problems that are large in terms of data/parameters'.
+  for problems that are large in terms of data/parameters*".
 
-  Note, amsgrad is currently not supported and the argument can only be False.
-
-  # References
-      See [Kingma et al., 2014](http://arxiv.org/abs/1412.6980)
-        ([pdf](http://arxiv.org/pdf/1412.6980.pdf)).
-      For AMSGrad see [Reddi et al., 2-18]
-        (https://openreview.net/pdf?id=ryQu7f-RZ)
+  For AMSGrad see [On The Convergence Of Adam And Beyond.
+  Reddi et al., 5-8](https://openreview.net/pdf?id=ryQu7f-RZ).
   """
 
   def __init__(self,
@@ -64,7 +62,7 @@ class Adam(optimizer_v2.OptimizerV2):
       $$t := 0 \text{(Initialize timestep)}$$
 
       The update rule for `variable` with gradient `g` uses an optimization
-      described at the end of section2 of the paper:
+      described at the end of section 2 of the paper:
 
       $$t := t + 1$$
       $$lr_t := \text{learning\_rate} * \sqrt{1 - beta_2^t} / (1 - beta_1^t)$$
@@ -82,7 +80,7 @@ class Adam(optimizer_v2.OptimizerV2):
       $$t := 0 \text{(Initialize timestep)}$$
 
       The update rule for `variable` with gradient `g` uses an optimization
-      described at the end of section2 of the paper:
+      described at the end of section 2 of the paper:
 
       $$t := t + 1$$
       $$lr_t := \text{learning\_rate} * \sqrt{1 - beta_2^t} / (1 - beta_1^t)$$
@@ -125,7 +123,11 @@ class Adam(optimizer_v2.OptimizerV2):
         a callable that takes no arguments and returns the actual value to use.
         This can be useful for changing these values across different
         invocations of optimizer functions. @end_compatibility
-      **kwargs: keyword arguments. Allowed to be {`decay`}
+      **kwargs: keyword arguments. Allowed to be {`clipnorm`, `clipvalue`, `lr`,
+        `decay`}. `clipnorm` is clip gradients by norm; `clipvalue` is clip
+        gradients by value, `decay` is included for backward compatibility to
+        allow time inverse decay of learning rate. `lr` is included for backward
+        compatibility, recommended to use `learning_rate` instead.
     """
 
     super(Adam, self).__init__(name, **kwargs)
@@ -133,7 +135,7 @@ class Adam(optimizer_v2.OptimizerV2):
     self._set_hyper('decay', self._initial_decay)
     self._set_hyper('beta_1', beta_1)
     self._set_hyper('beta_2', beta_2)
-    self._set_hyper('epsilon', epsilon)
+    self.epsilon = epsilon or backend_config.epsilon()
     self.amsgrad = amsgrad
 
   def _create_slots(self, var_list):
@@ -164,7 +166,7 @@ class Adam(optimizer_v2.OptimizerV2):
     v = self.get_slot(var, 'v')
     beta_1_t = self._get_hyper('beta_1', var_dtype)
     beta_2_t = self._get_hyper('beta_2', var_dtype)
-    epsilon = self._get_hyper('epsilon', var_dtype)
+    epsilon_t = ops.convert_to_tensor(self.epsilon, var_dtype)
     local_step = math_ops.cast(self.iterations + 1, var_dtype)
     beta_1_power = math_ops.pow(beta_1_t, local_step)
     beta_2_power = math_ops.pow(beta_2_t, local_step)
@@ -178,7 +180,7 @@ class Adam(optimizer_v2.OptimizerV2):
           lr_t,
           beta_1_t,
           beta_2_t,
-          epsilon,
+          epsilon_t,
           grad,
           use_locking=self._use_locking)
     else:
@@ -193,7 +195,7 @@ class Adam(optimizer_v2.OptimizerV2):
           lr_t,
           beta_1_t,
           beta_2_t,
-          epsilon,
+          epsilon_t,
           grad,
           use_locking=self._use_locking)
 
@@ -205,7 +207,7 @@ class Adam(optimizer_v2.OptimizerV2):
     local_step = math_ops.cast(self.iterations + 1, var_dtype)
     beta_1_power = math_ops.pow(beta_1_t, local_step)
     beta_2_power = math_ops.pow(beta_2_t, local_step)
-    epsilon_t = self._get_hyper('epsilon', var_dtype)
+    epsilon_t = ops.convert_to_tensor(self.epsilon, var_dtype)
     lr = (lr_t * math_ops.sqrt(1 - beta_2_power) / (1 - beta_1_power))
 
     # m_t = beta1 * m + (1 - beta1) * g_t
@@ -240,11 +242,6 @@ class Adam(optimizer_v2.OptimizerV2):
           use_locking=self._use_locking)
       return control_flow_ops.group(*[var_update, m_t, v_t, v_hat_t])
 
-  def _resource_scatter_add(self, x, i, v):
-    with ops.control_dependencies(
-        [resource_variable_ops.resource_scatter_add(x.handle, i, v)]):
-      return x.value()
-
   def get_config(self):
     config = super(Adam, self).get_config()
     config.update({
@@ -252,7 +249,7 @@ class Adam(optimizer_v2.OptimizerV2):
         'decay': self._serialize_hyperparameter('decay'),
         'beta_1': self._serialize_hyperparameter('beta_1'),
         'beta_2': self._serialize_hyperparameter('beta_2'),
-        'epsilon': self._serialize_hyperparameter('epsilon'),
+        'epsilon': self.epsilon,
         'amsgrad': self.amsgrad,
     })
     return config

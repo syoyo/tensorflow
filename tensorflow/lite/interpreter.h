@@ -25,9 +25,9 @@ limitations under the License.
 #include "tensorflow/lite/allocation.h"
 #include "tensorflow/lite/c/c_api_internal.h"
 #include "tensorflow/lite/core/api/error_reporter.h"
+#include "tensorflow/lite/core/api/profiler.h"
 #include "tensorflow/lite/core/subgraph.h"
 #include "tensorflow/lite/memory_planner.h"
-#include "tensorflow/lite/profiling/profiler.h"
 #include "tensorflow/lite/stderr_reporter.h"
 
 namespace tflite {
@@ -74,6 +74,10 @@ constexpr TfLiteType typeToTfLiteType<string>() {
   return kTfLiteString;
 }
 
+template <>
+constexpr TfLiteType typeToTfLiteType<TfLiteFloat16>() {
+  return kTfLiteFloat16;
+}
 // An interpreter for a graph of nodes that input and output from tensors.
 // Each node of the graph processes a set of input tensors and produces a
 // set of output Tensors. All inputs/output tensors are referenced by index.
@@ -160,6 +164,12 @@ class Interpreter {
   // This variant assumes an external buffer has been allocated of size
   // bytes. The lifetime of buffer must be ensured to be greater or equal
   // to Interpreter.
+  TfLiteStatus SetTensorParametersReadOnly(
+      int tensor_index, TfLiteType type, const char* name,
+      const std::vector<int>& dims, TfLiteQuantization quantization,
+      const char* buffer, size_t bytes, const Allocation* allocation = nullptr);
+
+  // Legacy. Deprecated in favor of above.
   inline TfLiteStatus SetTensorParametersReadOnly(
       int tensor_index, TfLiteType type, const char* name,
       const std::vector<int>& dims, TfLiteQuantizationParams quantization,
@@ -179,6 +189,13 @@ class Interpreter {
   // This variant assumes an external buffer has been allocated of size
   // bytes. The lifetime of buffer must be ensured to be greater or equal
   // to Interpreter.
+  TfLiteStatus SetTensorParametersReadWrite(int tensor_index, TfLiteType type,
+                                            const char* name,
+                                            const std::vector<int>& dims,
+                                            TfLiteQuantization quantization,
+                                            bool is_variable = false);
+
+  // Legacy. Deprecated in favor of above.
   inline TfLiteStatus SetTensorParametersReadWrite(
       int tensor_index, TfLiteType type, const char* name,
       const std::vector<int>& dims, TfLiteQuantizationParams quantization,
@@ -343,6 +360,15 @@ class Interpreter {
     return context_->allow_fp32_relax_to_fp16;
   }
 
+  // Sets the cancellation function pointer in order to cancel a request in the
+  // middle of a call to Invoke(). The interpreter queries this function during
+  // inference, between op invocations; when it returns true, the interpreter
+  // will abort execution and return `kTfLiteError`. The `data` parameter
+  // contains any data used by the cancellation function, and if non-null,
+  // remains owned by the caller.
+  // WARNING: This is an experimental API and subject to change.
+  void SetCancellationFunction(void* data, bool (*check_cancelled_func)(void*));
+
   // Owning handle to a TfLiteDelegate instance.
   using TfLiteDelegatePtr =
       std::unique_ptr<TfLiteDelegate, void (*)(TfLiteDelegate*)>;
@@ -380,9 +406,14 @@ class Interpreter {
                                TfLiteBufferHandle* buffer_handle,
                                TfLiteDelegate** delegate);
 
-  void SetProfiler(profiling::Profiler* profiler);
+  // Sets the profiler to tracing execution. The caller retains ownership
+  // of the profiler and must ensure its validity.
+  // WARNING: This is an experimental API and subject to change.
+  void SetProfiler(Profiler* profiler);
 
-  profiling::Profiler* GetProfiler();
+  // Gets the profiler used for op tracing.
+  // WARNING: This is an experimental API and subject to change.
+  Profiler* GetProfiler();
 
   // The default capacity of `tensors_` vector.
   static constexpr int kTensorsReservedCapacity = 128;

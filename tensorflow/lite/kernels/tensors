@@ -1,0 +1,409 @@
+activations.cc:  return context->ResizeTensor(context, output,
+activations.cc:  return context->ResizeTensor(context, output,
+activations.cc:  return context->ResizeTensor(context, output,
+activations.cc:  return context->ResizeTensor(context, output,
+activations.cc:  return context->ResizeTensor(context, output,
+activations.cc:                    context->ResizeTensor(context, output, output_size));
+activations.cc:      context->ReportError(context, "Only float32 supported currently, got %s.",
+activations.cc:      context->ReportError(context, "Only float32 supported currently, got %s.",
+activations.cc:      context->ReportError(
+activations.cc:      context->ReportError(context, "Only float32 supported currently, got %s.",
+activations.cc:      context->ReportError(context, "Only float32 supported currently, got %s.",
+activations.cc:      context->ReportError(
+activations.cc:      context->ReportError(
+activations.cc:      context->ReportError(
+activations.cc:      context->ReportError(context, "Only float32 supported currently., got %s",
+activations.cc:      context->ReportError(context,
+activations.cc:      context->ReportError(context, "Only float32 supported currently, got %s.",
+add.cc:  return context->ResizeTensor(context, output, output_size);
+add.cc:    context->ReportError(context,
+arg_min_max.cc:  return context->ResizeTensor(context, output, output_dims);
+arg_min_max.cc:      context->ReportError(context, "Unknown index output data type: %d",
+arg_min_max.cc:      context->ReportError(
+audio_spectrogram.cc:  return context->ResizeTensor(context, output, output_size);
+basic_rnn.cc:  context->AddTensors(context, /*tensors_to_add=*/3, scratch_tensor_index);
+basic_rnn.cc:                    context->ResizeTensor(context, output, output_size_array));
+basic_rnn.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+basic_rnn.cc:                        context->ResizeTensor(context, hidden_state_quantized,
+basic_rnn.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+basic_rnn.cc:      &context->tensors[node->inputs->data[kHiddenStateTensor]];
+basic_rnn.cc:      context->ReportError(context, "Type %d not currently supported.",
+batch_to_space_nd.cc:  TfLiteIntArray* input_size = op_context->input->dims;
+batch_to_space_nd.cc:  const int* block_shape = GetTensorData<int32>(op_context->block_shape);
+batch_to_space_nd.cc:  const int* crops = GetTensorData<int32>(op_context->crops);
+batch_to_space_nd.cc:  TF_LITE_ENSURE_EQ(context, NumDimensions(op_context->block_shape),
+batch_to_space_nd.cc:  TF_LITE_ENSURE_EQ(context, op_context->block_shape->dims->data[0],
+batch_to_space_nd.cc:  TF_LITE_ENSURE_EQ(context, NumDimensions(op_context->crops),
+batch_to_space_nd.cc:  return context->ResizeTensor(context, op_context->output, output_size);
+batch_to_space_nd.cc:      context->ReportError(
+bidirectional_sequence_lstm.cc:  context->AddTensors(context, kNumTemporaryTensors, scratch_tensor_index);
+bidirectional_sequence_lstm.cc:                    context->ResizeTensor(context, fw_output, fw_output_size));
+bidirectional_sequence_lstm.cc:  TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, fw_scratch_buffer,
+bidirectional_sequence_lstm.cc:        context, context->ResizeTensor(context, bw_output, bw_output_size));
+bidirectional_sequence_lstm.cc:  TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, bw_scratch_buffer,
+bidirectional_sequence_lstm.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+bidirectional_sequence_lstm.cc:          context, context->ResizeTensor(context, fw_activation_state_quantized,
+bidirectional_sequence_lstm.cc:          context, context->ResizeTensor(context, bw_activation_state_quantized,
+bidirectional_sequence_lstm.cc:                        context->ResizeTensor(context, fw_cell_state_quantized,
+bidirectional_sequence_lstm.cc:                        context->ResizeTensor(context, bw_cell_state_quantized,
+bidirectional_sequence_lstm.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+bidirectional_sequence_lstm.cc:                        context->ResizeTensor(context, prod_scaling_factors,
+bidirectional_sequence_lstm.cc:                        context->ResizeTensor(context, recovered_cell_weights,
+bidirectional_sequence_lstm.cc:                          context->ResizeTensor(context, aux_input_quantized,
+bidirectional_sequence_lstm.cc:      context->ReportError(context, "Type %d is not currently supported.",
+bidirectional_sequence_rnn.cc:  context->AddTensors(context, kNumTemporaryTensors, scratch_tensor_index);
+bidirectional_sequence_rnn.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+bidirectional_sequence_rnn.cc:          context, context->ResizeTensor(context, fw_hidden_state_quantized,
+bidirectional_sequence_rnn.cc:          context, context->ResizeTensor(context, bw_hidden_state_quantized,
+bidirectional_sequence_rnn.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+bidirectional_sequence_rnn.cc:                          context->ResizeTensor(context, aux_input_quantized,
+bidirectional_sequence_rnn.cc:      context, context->ResizeTensor(context, fw_output, fw_output_size_array));
+bidirectional_sequence_rnn.cc:    TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, bw_output,
+bidirectional_sequence_rnn.cc:      context->ReportError(context, "Type not currently supported.");
+cast.cc:  return context->ResizeTensor(context, output,
+comparisons.cc:  return context->ResizeTensor(context, output, output_size);
+comparisons.cc:      context->ReportError(context,
+comparisons.cc:      context->ReportError(context,
+comparisons.cc:      context->ReportError(context,
+comparisons.cc:      context->ReportError(context,
+comparisons.cc:      context->ReportError(context,
+comparisons.cc:      context->ReportError(context,
+concatenation.cc:  TfLiteTensor* t0 = &context->tensors[node->inputs->data[0]];
+concatenation.cc:    TfLiteTensor* t = &context->tensors[node->inputs->data[i]];
+concatenation.cc:  TfLiteTensor* output = &context->tensors[node->outputs->data[0]];
+concatenation.cc:  return context->ResizeTensor(context, output, output_size);
+concatenation.cc:  TfLiteTensor* output = &context->tensors[node->outputs->data[0]];
+concatenation.cc:      context->ReportError(context,
+conv.cc:// Note: `context->AddTensors` might invalidate pointers to existing tensors.
+conv.cc:  TfLiteTensor* input = &context->tensors[node->inputs->data[0]];
+conv.cc:  TfLiteTensor* filter = &context->tensors[node->inputs->data[1]];
+conv.cc:      context->AddTensors(context, 1, &data->im2col_id);
+conv.cc:      context->AddTensors(context, 1, &data->hwcn_weights_id);
+conv.cc:          context, context->AddTensors(context, 1, &data->input_quantized_id));
+conv.cc:          context, context->AddTensors(context, 1, &data->scaling_factors_id));
+conv.cc:  TfLiteTensor* output = &context->tensors[node->outputs->data[0]];
+conv.cc:  TfLiteTensor* input = &context->tensors[node->inputs->data[0]];
+conv.cc:  TfLiteTensor* filter = &context->tensors[node->inputs->data[1]];
+conv.cc:    bias = &context->tensors[node->inputs->data[2]];
+conv.cc:  data->run_multithreaded_kernel = context->recommended_num_threads != 1;
+conv.cc:  auto output_status = context->ResizeTensor(context, output, output_size);
+conv.cc:        &context->tensors[node->temporaries->data[data->im2col_index]];
+conv.cc:    auto im2col_status = context->ResizeTensor(context, im2col, im2col_size);
+conv.cc:        &context->tensors[node->temporaries->data[data->hwcn_weights_index]];
+conv.cc:        context->ResizeTensor(context, hwcn_weights, hwcn_weights_size);
+conv.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+conv.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+conv.cc:  TfLiteTensor* output = &context->tensors[node->outputs->data[0]];
+conv.cc:  TfLiteTensor* input = &context->tensors[node->inputs->data[0]];
+conv.cc:  TfLiteTensor* filter = &context->tensors[node->inputs->data[1]];
+conv.cc:      has_bias ? &context->tensors[node->inputs->data[2]] : nullptr;
+conv.cc:          ? &context->tensors[node->temporaries->data[data->im2col_index]]
+conv.cc:          ? &context->tensors[node->temporaries->data[data->hwcn_weights_index]]
+conv.cc:      context->ReportError(context, "Type %d not currently supported.",
+depthwise_conv.cc:  return context->ResizeTensor(context, output, outputSize);
+depthwise_conv.cc:      context->ReportError(context, "Type %d not currently supported.",
+dequantize.cc:  return context->ResizeTensor(context, op_context.output,
+dequantize.cc:      context->ReportError(context, "Type %d not supported.",
+detection_postprocess.cc:  context->AddTensors(context, 1, &op_data->decoded_boxes_index);
+detection_postprocess.cc:  context->AddTensors(context, 1, &op_data->scores_index);
+detection_postprocess.cc:  context->AddTensors(context, 1, &op_data->active_candidate_index);
+detection_postprocess.cc:  return context->ResizeTensor(context, tensor, size);
+detection_postprocess.cc:  TfLiteTensor* decoded_boxes = &context->tensors[op_data->decoded_boxes_index];
+detection_postprocess.cc:  TfLiteTensor* scores = &context->tensors[op_data->scores_index];
+detection_postprocess.cc:      &context->tensors[op_data->active_candidate_index];
+detection_postprocess.cc:        &context->tensors[op_data->decoded_boxes_index];
+detection_postprocess.cc:      &context->tensors[op_data->decoded_boxes_index];
+detection_postprocess.cc:      &context->tensors[op_data->active_candidate_index];
+detection_postprocess.cc:      &context->tensors[op_data->decoded_boxes_index];
+detection_postprocess.cc:      &context->tensors[op_data->decoded_boxes_index];
+detection_postprocess.cc:      TfLiteTensor* temporary_scores = &context->tensors[op_data->scores_index];
+div.cc:  return context->ResizeTensor(context, output, output_size);
+div.cc:    context->ReportError(
+eigen_support.cc:  Eigen::setNbThreads(context->recommended_num_threads);
+eigen_support.cc:      context->GetExternalContext(context, kTfLiteEigenContext));
+eigen_support.cc:  if (context->recommended_num_threads != -1) {
+eigen_support.cc:    num_threads = context->recommended_num_threads;
+eigen_support.cc:  SetEigenNbThreads(context->recommended_num_threads);
+eigen_support.cc:    if (context->recommended_num_threads != -1) {
+eigen_support.cc:      SetEigenNbThreads(context->recommended_num_threads);
+eigen_support.cc:    context->SetExternalContext(context, kTfLiteEigenContext, ptr);
+eigen_support.cc:    context->SetExternalContext(context, kTfLiteEigenContext, nullptr);
+elementwise.cc:    context->ReportError(context, "Current data type %d is not supported.",
+elementwise.cc:  return context->ResizeTensor(context, output,
+embedding_lookup.cc:  return context->ResizeTensor(context, output, outputSize);
+embedding_lookup.cc:      context->ReportError(context,
+embedding_lookup.cc:      context->ReportError(context,
+embedding_lookup.cc:      context->ReportError(context, "Type not currently supported.");
+embedding_lookup_sparse.cc:  TF_LITE_ENSURE_STATUS(context->ResizeTensor(context, output, output_shape));
+embedding_lookup_sparse.cc:      context->ReportError(context,
+expand_dims.cc:  return context->ResizeTensor(context, output, output_dims);
+exp.cc:  return context->ResizeTensor(context, op_context.output, output_dims);
+exp.cc:        context->ReportError(context,
+fake_quant.cc:    context->ReportError(
+fake_quant.cc:  return context->ResizeTensor(context, op_context.output, output_dims);
+fill.cc:      context->ReportError(context, "Fill dimensions must be >= 0", dims->type);
+fill.cc:  return context->ResizeTensor(context, output, output_shape);
+fill.cc:      context->ReportError(
+fill.cc:      context->ReportError(
+floor.cc:  return context->ResizeTensor(context, output, output_size);
+floor_div.cc:    context->ReportError(context, "Currently floor_div only supports int32.");
+floor_div.cc:  return context->ResizeTensor(context, output, output_size);
+floor_div.cc:      context->ReportError(context, "Division by 0");
+floor_div.cc:      context->ReportError(context, "Currently floor_div only supports int32.");
+floor_mod.cc:    context->ReportError(context, "Type '%s' is not supported by floor_mod.",
+floor_mod.cc:  return context->ResizeTensor(context, output, output_size);
+floor_mod.cc:        context->ReportError(context, "Division by 0");
+floor_mod.cc:      context->ReportError(context, "Type '%s' is not supported by floor_mod.",
+fully_connected.cc:  context->AddTensors(context, /*tensors_to_add=*/2,
+fully_connected.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+fully_connected.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+fully_connected.cc:                    context->ResizeTensor(context, output, output_size_array));
+fully_connected.cc:        context->ReportError(
+fully_connected.cc:        context->ReportError(
+fully_connected.cc:    context->ReportError(context, "Unexpected data type");
+fully_connected.cc:        context->ReportError(context,
+fully_connected.cc:      context->ReportError(context, "Type %d not currently supported.",
+gather.cc:      context->ReportError(
+gather.cc:      context->ReportError(context, "Type '%s' is not supported by gather.",
+gather.cc:  return context->ResizeTensor(context, output, output_shape);
+gather.cc:        context->ReportError(context, "Type '%s' is not supported by gather.",
+gather.cc:        context->ReportError(context, "Type '%s' is not supported by gather.",
+gather.cc:  context->ReportError(context,
+gemm_support.cc:      context->GetExternalContext(context, kTfLiteGemmLowpContext));
+gemm_support.cc:    ptr->gemm_context->set_max_num_threads(context->recommended_num_threads);
+gemm_support.cc:    if (context->recommended_num_threads != -1) {
+gemm_support.cc:      ptr->gemm_context->set_max_num_threads(context->recommended_num_threads);
+gemm_support.cc:    context->SetExternalContext(context, kTfLiteGemmLowpContext, ptr);
+gemm_support.cc:    context->SetExternalContext(context, kTfLiteGemmLowpContext, nullptr);
+hashtable_lookup.cc:    status = context->ResizeTensor(context, output, outputSize);
+hashtable_lookup.cc:  if (context->ResizeTensor(context, hits, hitSize) == kTfLiteError) {
+kernel_util.h:  return &context->tensors[node->inputs->data[index]];
+kernel_util.h:  TfLiteTensor* tensor = &context->tensors[node->inputs->data[index]];
+kernel_util.h:  return &context->tensors[node->outputs->data[index]];
+kernel_util.h:  return &context->tensors[node->temporaries->data[index]];
+kernel_util.h:    return &context->tensors[node->inputs->data[index]];
+l2norm.cc:  return context->ResizeTensor(context, output, output_size);
+l2norm.cc:    context->ReportError(context, "Output type is %d, requires float.",
+layer_norm_lstm.cc:  context->AddTensors(context, /*tensors_to_add=*/kTensorsToAdd,
+layer_norm_lstm.cc:                    context->ResizeTensor(context, output, output_size));
+layer_norm_lstm.cc:  TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scratch_buffer,
+layer_norm_lstm.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+layer_norm_lstm.cc:          context, context->ResizeTensor(context, activation_state_quantized,
+layer_norm_lstm.cc:                        context->ResizeTensor(context, cell_state_quantized,
+layer_norm_lstm.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+layer_norm_lstm.cc:                        context->ResizeTensor(context, prod_scaling_factors,
+layer_norm_lstm.cc:                        context->ResizeTensor(context, recovered_weights,
+layer_norm_lstm.cc:      &context->tensors[node->inputs->data[kInputActivationStateTensor]];
+layer_norm_lstm.cc:      &context->tensors[node->inputs->data[kInputCellStateTensor]];
+layer_norm_lstm.cc:      context->ReportError(context, "Type %d is not currently supported.",
+local_response_norm.cc:  return context->ResizeTensor(context, output, output_size);
+local_response_norm.cc:    context->ReportError(context, "Output type is %d, requires float.",
+logical.cc:    context->ReportError(context, "Logical ops only support bool type.");
+logical.cc:  return context->ResizeTensor(context, output, output_size);
+lsh_projection.cc:  return context->ResizeTensor(context, output, outputSize);
+lstm.cc:  context->AddTensors(context, /*tensors_to_add=*/7,
+lstm.cc:      &context->tensors[op_data->activation_state_tensor_index];
+lstm.cc:      &context->tensors[op_data->cell_state_tensor_index];
+lstm.cc:                    context->ResizeTensor(context, output, output_size));
+lstm.cc:  TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scratch_buffer,
+lstm.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+lstm.cc:          context, context->ResizeTensor(context, activation_state_quantized,
+lstm.cc:                        context->ResizeTensor(context, cell_state_quantized,
+lstm.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+lstm.cc:                        context->ResizeTensor(context, prod_scaling_factors,
+lstm.cc:                        context->ResizeTensor(context, recovered_cell_weights,
+lstm.cc:      &context->tensors[op_data->activation_state_tensor_index];
+lstm.cc:      &context->tensors[op_data->cell_state_tensor_index];
+lstm.cc:      context->ReportError(context, "Type %d is not currently supported.",
+lstm.cc:  TF_LITE_ENSURE_OK(context, context->ResizeTensor(
+lstm.cc:      context, context->ResizeTensor(context, state_out,
+lstm.cc:      context, context->ResizeTensor(context, concat_temp, concat_temp_size));
+lstm.cc:  TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, activation_temp,
+lstm.cc:    TfLiteTensor* tensor = &context->tensors[node->inputs->data[index]];
+lstm.cc:      context->ReportError(
+lstm.cc:      context->ReportError(context,
+lstm.cc:    context->ReportError(context,
+maximum_minimum.cc:  return context->ResizeTensor(context, op_context.output, output_size);
+maximum_minimum.cc:        context->ReportError(context,
+maximum_minimum.cc:    context->ReportError(context,
+mfcc.cc:  return context->ResizeTensor(context, output, output_size);
+mirror_pad.cc:    context->ReportError(
+mirror_pad.cc:    context->ReportError(
+mirror_pad.cc:        context->ResizeTensor(context, output_tensor, output_size.release()));
+mirror_pad.cc:  return context->ResizeTensor(context, output_tensor, output_size.release());
+mul.cc:  return context->ResizeTensor(context, output, output_size);
+mul.cc:    context->ReportError(
+mul.cc:    context->ReportError(context,
+neg.cc:  return context->ResizeTensor(context, output,
+neg.cc:      context->ReportError(
+one_hot.cc:  return context->ResizeTensor(context, op_context.output, output_size);
+one_hot.cc:      context->ReportError(context, "Unknown output data type: %d",
+pack.cc:    context->ReportError(context, "Type '%s' is not supported by pack.",
+pack.cc:  return context->ResizeTensor(context, output, output_shape);
+pack.cc:      context->ReportError(context, "Type '%s' is not supported by pack.",
+pad.cc:  TF_LITE_ENSURE_EQ(context, SizeOfDimension(op_context->paddings, 0),
+pad.cc:                    op_context->dims);
+pad.cc:  TF_LITE_ENSURE_EQ(context, SizeOfDimension(op_context->paddings, 1), 2);
+pad.cc:  TfLiteIntArray* input_size = op_context->input->dims;
+pad.cc:  const int32* paddings_data = GetTensorData<int32>(op_context->paddings);
+pad.cc:  for (int idx = 0; idx < op_context->dims; ++idx) {
+pad.cc:  return context->ResizeTensor(context, op_context->output, output_size);
+pad.cc:      context->ReportError(context,
+pooling.cc:  return context->ResizeTensor(context, output, output_size);
+pooling.cc:      context->ReportError(context, "Type %d not currently supported.",
+pooling.cc:      context->ReportError(context, "Type %d not currently supported.",
+pooling.cc:      context->ReportError(context, "Type %d not currently supported.",
+pow.cc:    context->ReportError(context, "Unsupported data type %d.", type);
+pow.cc:  return context->ResizeTensor(context, output, output_size);
+pow.cc:      context->ReportError(context,
+pow.cc:      context->ReportError(context, "Unsupported data type: %d", output->type);
+range.cc:      context->ReportError(context, "Unknown data type: %d", start->type);
+range.cc:  return context->ResizeTensor(context, output, output_shape_array);
+range.cc:      context->ReportError(context, "Unknown index output data type: %d",
+range.cc:      context->ReportError(context, "Unsupported data type: %d", output->type);
+reduce.cc:  context->AddTensors(context, 3, scratch_tensor_index);
+reduce.cc:  axis_size->data[0] = static_cast<int>(NumElements(op_context->axis));
+reduce.cc:  return context->ResizeTensor(context, resolved_axis, axis_size);
+reduce.cc:  size->data[0] = static_cast<int>(NumElements(op_context->output));
+reduce.cc:  return context->ResizeTensor(context, temp_sum, size);
+reduce.cc:  size_t num_axis = NumElements(op_context->axis);
+reduce.cc:  const TfLiteIntArray* input_dims = op_context->input->dims;
+reduce.cc:  int input_num_dims = NumDimensions(op_context->input);
+reduce.cc:    return context->ResizeTensor(context, op_context->output,
+reduce.cc:  const int* axis = GetTensorData<int>(op_context->axis);
+reduce.cc:  if (op_context->params->keep_dims) {
+reduce.cc:    return context->ResizeTensor(context, op_context->output, output_dims);
+reduce.cc:    return context->ResizeTensor(context, op_context->output, output_dims);
+reduce.cc:  index_size->data[0] = NumDimensions(op_context->input);
+reduce.cc:                    context->ResizeTensor(context, scratch_tensor, index_size));
+reduce.cc:  switch (op_context->input->type) {
+reduce.cc:  int64_t num_axis = NumElements(op_context->axis);
+reduce.cc:  if (IsDynamicTensor(op_context->output)) {
+reduce.cc:  if (op_context->input->type == kTfLiteUInt8) {
+reduce.cc:    TF_LITE_ENSURE_EQ(context, op_context->input->params.scale,
+reduce.cc:                      op_context->output->params.scale);
+reduce.cc:    TF_LITE_ENSURE_EQ(context, op_context->input->params.zero_point,
+reduce.cc:                      op_context->output->params.zero_point);
+reduce.cc:          GetTensorData<T>(op_context->input), op_context->input->dims->data,
+reduce.cc:          op_context->input->dims->size, GetTensorData<T>(op_context->output),
+reduce.cc:          op_context->output->dims->data, op_context->output->dims->size,
+reduce.cc:          GetTensorData<int>(op_context->axis), num_axis,
+reduce.cc:          op_context->params->keep_dims, GetTensorData<int>(temp_index),
+register.cc:  context->ReportError(
+relu1.cc:  return context->ResizeTensor(context, output,
+reshape.cc:  return context->ResizeTensor(context, output, output_shape);
+resize_bilinear.cc:  return context->ResizeTensor(context, output, output_size);
+resize_bilinear.cc:    context->ReportError(context, "Output type is %d, requires float.",
+resize_nearest_neighbor.cc:  return context->ResizeTensor(context, output, output_size);
+resize_nearest_neighbor.cc:    context->ReportError(context, "Output type is %d, requires float or uint8.",
+select.cc:  return context->ResizeTensor(context, output, output_size);
+select.cc:      context->ReportError(context,                                            \
+shape.cc:      context->ReportError(context, "Unknown shape output data type: %d",
+shape.cc:  return context->ResizeTensor(context, output, output_size);
+slice.cc:        context->ReportError(context, "Invalid size.");
+slice.cc:        context->ReportError(context, "Invalid begin and size.");
+slice.cc:    context->ReportError(
+slice.cc:  return context->ResizeTensor(context, output, output_shape);
+slice.cc:    context->ReportError(
+slice.cc:      context->ReportError(
+space_to_batch_nd.cc:  TfLiteIntArray* input_size = op_context->input->dims;
+space_to_batch_nd.cc:  const int32* block_shape = GetTensorData<int32>(op_context->block_shape);
+space_to_batch_nd.cc:  const int32* paddings_data = GetTensorData<int32>(op_context->paddings);
+space_to_batch_nd.cc:  TF_LITE_ENSURE_EQ(context, NumDimensions(op_context->block_shape),
+space_to_batch_nd.cc:  TF_LITE_ENSURE_EQ(context, op_context->block_shape->dims->data[0],
+space_to_batch_nd.cc:  TF_LITE_ENSURE_EQ(context, NumDimensions(op_context->paddings),
+space_to_batch_nd.cc:  return context->ResizeTensor(context, op_context->output, output_size);
+space_to_batch_nd.cc:      context->ReportError(
+space_to_depth.cc:  return context->ResizeTensor(context, output, output_size);
+space_to_depth.cc:      context->ReportError(context, "Type %d not currently supported.",
+sparse_output_fully_connected.cc:  context->AddTensors(context, /*tensors_to_add=*/kNumTemporaryTensors,
+sparse_output_fully_connected.cc:                    context->ResizeTensor(context, output, output_size_array));
+sparse_output_fully_connected.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+sparse_output_fully_connected.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+sparse_output_fully_connected.cc:      context->ReportError(context, "Type %d is not currently supported.",
+sparse_to_dense.cc:  return context->ResizeTensor(context, output, output_shape_array);
+sparse_to_dense.cc:      context->ReportError(
+sparse_to_dense.cc:      context->ReportError(context,
+sparse_to_dense.cc:    context->ReportError(context, "Dense shape type %d not supported.",
+sparse_to_dense.cc:          context->ReportError(
+sparse_to_dense.cc:          context->ReportError(
+sparse_to_dense.cc:      context->ReportError(
+split.cc:    TF_LITE_ENSURE_STATUS(context->ResizeTensor(context, output, output_dims));
+split.cc:      context->ReportError(
+split_v.cc:    context->ReportError(context, "size_splits only support type int32|int64.");
+split_v.cc:        context->ReportError(context,
+split_v.cc:      context->ReportError(
+split_v.cc:    context->ReportError(
+split_v.cc:    TF_LITE_ENSURE_STATUS(context->ResizeTensor(context, output, output_dims));
+split_v.cc:      context->ReportError(
+squared_difference.cc:  return context->ResizeTensor(context, output, output_size);
+squared_difference.cc:    context->ReportError(context,
+squeeze.cc:  return context->ResizeTensor(context, op_context.output, output_dims);
+strided_slice.cc:  const int dim = op_context->input->dims->data[idx];
+strided_slice.cc:  const bool pos_stride = GetTensorData<int32_t>(op_context->strides)[idx] > 0;
+strided_slice.cc:  return op_context->params->begin_mask & (1 << idx)
+strided_slice.cc:             : ClampedIndex(GetTensorData<int32_t>(op_context->begin)[idx], dim,
+strided_slice.cc:  const int dim = op_context->input->dims->data[idx];
+strided_slice.cc:  const bool pos_stride = GetTensorData<int32_t>(op_context->strides)[idx] > 0;
+strided_slice.cc:  return op_context->params->end_mask & (1 << idx)
+strided_slice.cc:             : ClampedIndex(GetTensorData<int32_t>(op_context->end)[idx], dim,
+strided_slice.cc:  for (int idx = op_context->dims - 1; idx >= 0; --idx) {
+strided_slice.cc:    int32_t stride = GetTensorData<int32_t>(op_context->strides)[idx];
+strided_slice.cc:    const bool shrink_axis = op_context->params->shrink_axis_mask & (1 << idx);
+strided_slice.cc:      context->ResizeTensor(context, op_context->output, output_shape));
+strided_slice.cc:      context->ReportError(context,
+sub.cc:  return context->ResizeTensor(context, output, output_size);
+sub.cc:    context->ReportError(
+svdf.cc:  context->AddTensors(context, /*tensors_to_add=*/4,
+svdf.cc:      &context->tensors[op_data->activation_state_tensor_index];
+svdf.cc:                    context->ResizeTensor(context, output, output_size_array));
+svdf.cc:  TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scratch_tensor,
+svdf.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+svdf.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+svdf.cc:                        context->ResizeTensor(context, float_weights_time,
+svdf.cc:      &context->tensors[op_data->activation_state_tensor_index];
+svdf.cc:      context->ReportError(context, "Type %d not currently supported.",
+tile.cc:      return context->ResizeTensor(
+tile.cc:      return context->ResizeTensor(
+tile.cc:      context->ReportError(
+tile.cc:    context->ReportError(context,
+tile.cc:      context->ReportError(context, "Type '%s' is not supported by tile.",
+topk_v2.cc:    TfLiteStatus status = context->ResizeTensor(context, tensor, new_size);
+topk_v2.cc:      context->ReportError(context,
+transpose.cc:  int dims = NumDimensions(op_context->input);
+transpose.cc:  const int* perm_data = GetTensorData<int32_t>(op_context->perm);
+transpose.cc:  TF_LITE_ENSURE_EQ(context, NumDimensions(op_context->perm), 1);
+transpose.cc:  TF_LITE_ENSURE_EQ(context, op_context->perm->dims->data[0], dims);
+transpose.cc:  TfLiteIntArray* input_size = op_context->input->dims;
+transpose.cc:  return context->ResizeTensor(context, op_context->output, output_size);
+transpose.cc:      context->ReportError(context,
+transpose_conv.cc:    context->ReportError(context, "Output shape is %d, not int32.",
+transpose_conv.cc:  return context->ResizeTensor(context, output, shape);
+transpose_conv.cc:    context->AddTensors(context, 1, &data->im2col_id);
+transpose_conv.cc:    context->tensors[data->im2col_id].type = kTfLiteFloat32;
+transpose_conv.cc:    context->ReportError(context, "im2col shape is %d, not int32.",
+transpose_conv.cc:  return context->ResizeTensor(context, im2col, im2col_shape_array);
+transpose_conv.cc:      &context->tensors[node->temporaries->data[user_data->im2col_index]];
+transpose_conv.cc:      &context->tensors[node->temporaries->data[user_data->im2col_index]];
+transpose_conv.cc:      context->ReportError(context, "Type %d, not currently supported.",
+unidirectional_sequence_lstm.cc:  context->AddTensors(context, kNumTemporaryTensors, scratch_tensor_index);
+unidirectional_sequence_lstm.cc:                    context->ResizeTensor(context, output, output_size));
+unidirectional_sequence_lstm.cc:  TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scratch_buffer,
+unidirectional_sequence_lstm.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+unidirectional_sequence_lstm.cc:          context, context->ResizeTensor(context, activation_state_quantized,
+unidirectional_sequence_lstm.cc:                        context->ResizeTensor(context, cell_state_quantized,
+unidirectional_sequence_lstm.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+unidirectional_sequence_lstm.cc:                        context->ResizeTensor(context, prod_scaling_factors,
+unidirectional_sequence_lstm.cc:                        context->ResizeTensor(context, recovered_cell_weights,
+unidirectional_sequence_lstm.cc:      context->ReportError(context, "Type %d is not currently supported.",
+unidirectional_sequence_rnn.cc:  context->AddTensors(context, /*tensors_to_add=*/3, scratch_tensor_index);
+unidirectional_sequence_rnn.cc:                    context->ResizeTensor(context, output, output_size_array));
+unidirectional_sequence_rnn.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, input_quantized,
+unidirectional_sequence_rnn.cc:                        context->ResizeTensor(context, hidden_state_quantized,
+unidirectional_sequence_rnn.cc:      TF_LITE_ENSURE_OK(context, context->ResizeTensor(context, scaling_factors,
+unidirectional_sequence_rnn.cc:      context->ReportError(context, "Type %d not currently supported.",
+unpack.cc:    context->ReportError(context,
+unpack.cc:        context, context->ResizeTensor(context, output, copied_output_shape));
+unpack.cc:      context->ReportError(context,
+zeros_like.cc:  return context->ResizeTensor(context, output,
+zeros_like.cc:      context->ReportError(context,

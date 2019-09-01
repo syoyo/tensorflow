@@ -30,12 +30,14 @@ namespace {
 bool IsElementwiseOperator(OperatorType optype) {
   switch (optype) {
     case OperatorType::kCast:
+    case OperatorType::kCeil:
     case OperatorType::kExp:
     case OperatorType::kFloor:
     case OperatorType::kNeg:
     case OperatorType::kRelu:
     case OperatorType::kRelu1:
     case OperatorType::kRelu6:
+    case OperatorType::kRound:
     case OperatorType::kTanh:
     case OperatorType::kSqrt:
     case OperatorType::kSquare:

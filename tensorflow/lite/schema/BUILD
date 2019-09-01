@@ -9,6 +9,13 @@ load("//tensorflow/lite:special_rules.bzl", "tflite_portable_test_suite")
 
 py_binary(
     name = "upgrade_schema",
+    srcs = ["upgrade_schema.py"],
+    python_version = "PY2",
+    deps = [":upgrade_schema_main_lib"],
+)
+
+py_library(
+    name = "upgrade_schema_main_lib",
     srcs = [
         "upgrade_schema.py",
     ],
@@ -25,12 +32,11 @@ py_binary(
     ],
 )
 
-# TODO(wvo): re-enable this test once latest FlatBuffers has landed.
-
 py_test(
     name = "upgrade_schema_test",
     size = "small",
     srcs = ["upgrade_schema_test.py"],
+    python_version = "PY2",
     srcs_version = "PY2AND3",
     tags = [
         "manual",
@@ -39,7 +45,7 @@ py_test(
         "notap",
     ],
     deps = [
-        ":upgrade_schema",
+        ":upgrade_schema_main_lib",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:framework_test_lib",
     ],
@@ -70,7 +76,6 @@ flatbuffer_cc_library(
         "--no-union-value-namespacing",
         "--gen-object-api",
     ],
-    gen_reflections = True,
     out_prefix = "reflection/",
 )
 

@@ -35,7 +35,7 @@ class XlaOpsTest(xla_test.XLATestCase, parameterized.TestCase):
 
   def _assertOpOutputMatchesExpected(self, op, args, expected,
                                      equality_fn=None):
-    with self.test_session() as session:
+    with self.session() as session:
       with self.test_scope():
         placeholders = [
             array_ops.placeholder(dtypes.as_dtype(arg.dtype), arg.shape)
@@ -310,7 +310,7 @@ class XlaOpsTest(xla_test.XLATestCase, parameterized.TestCase):
               dtype=dtype))
 
   def testDynamicSliceWithIncorrectStartIndicesShape(self):
-    with self.test_session() as session:
+    with self.session() as session:
       with self.test_scope():
         output = xla.dynamic_slice(
             np.arange(1000, dtype=np.int32).reshape([10, 10, 10]),
@@ -319,11 +319,11 @@ class XlaOpsTest(xla_test.XLATestCase, parameterized.TestCase):
         session.run(output)
       self.assertRegexpMatches(
           invalid_arg_error.exception.message,
-          (r'^start_indices must be a vector with length equal to input rank, '
+          (r'start_indices must be a vector with length equal to input rank, '
            r'but input rank is 3 and start_indices has shape \[2\].*'))
 
   def testDynamicSliceWithIncorrectSizeIndicesShape(self):
-    with self.test_session() as session:
+    with self.session() as session:
       with self.test_scope():
         output = xla.dynamic_slice(
             np.arange(1000, dtype=np.int32).reshape([10, 10, 10]),
@@ -332,7 +332,7 @@ class XlaOpsTest(xla_test.XLATestCase, parameterized.TestCase):
         session.run(output)
       self.assertRegexpMatches(
           invalid_arg_error.exception.message,
-          (r'^size_indices must be a vector with length equal to input rank, '
+          (r'size_indices must be a vector with length equal to input rank, '
            r'but input rank is 3 and size_indices has shape \[2\].*'))
 
 

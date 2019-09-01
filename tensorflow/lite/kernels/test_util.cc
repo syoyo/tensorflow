@@ -14,13 +14,22 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/lite/kernels/test_util.h"
 
-#include "tensorflow/lite/version.h"
 #include "tensorflow/core/platform/logging.h"
+#include "tensorflow/lite/delegates/nnapi/nnapi_delegate.h"
+#include "tensorflow/lite/version.h"
 
 namespace tflite {
 
 using ::testing::FloatNear;
 using ::testing::Matcher;
+
+namespace {
+
+// Whether to enable (global) use of NNAPI. Note that this will typically
+// be set via a command-line flag.
+static bool force_use_nnapi = false;
+
+}  // namespace
 
 std::vector<Matcher<float>> ArrayFloatNear(const std::vector<float>& values,
                                            float max_abs_error) {
@@ -47,7 +56,12 @@ std::vector<Matcher<std::complex<float>>> ArrayComplex64Near(
 }
 
 int SingleOpModel::AddInput(const TensorData& t, bool is_variable) {
-  int id = AddTensor<float>(t, {}, is_variable);
+  int id = 0;
+  if (t.per_channel_quantization) {
+    id = AddTensorPerChannelQuant(t);
+  } else {
+    id = AddTensor<float>(t, {}, is_variable);
+  }
   inputs_.push_back(id);
   return id;
 }
@@ -119,10 +133,10 @@ void SingleOpModel::BuildInterpreter(std::vector<std::vector<int>> input_shapes,
 
   CHECK(interpreter_ != nullptr);
 
-  int i = 0;
-  for (const auto& shape : input_shapes) {
-    int input_idx = interpreter_->inputs()[i++];
+  for (size_t i = 0; i < input_shapes.size(); ++i) {
+    const int input_idx = interpreter_->inputs()[i];
     if (input_idx == kOptionalTensor) continue;
+    const auto& shape = input_shapes[i];
     if (shape.empty()) continue;
     CHECK(interpreter_->ResizeInputTensor(input_idx, shape) == kTfLiteOk);
   }
@@ -133,6 +147,11 @@ void SingleOpModel::BuildInterpreter(std::vector<std::vector<int>> input_shapes,
       << "Cannot allocate tensors";
   interpreter_->ResetVariableTensors();
 
+  if (force_use_nnapi) {
+    // TODO(b/124505407): Check the result and fail accordingly.
+    interpreter_->ModifyGraphWithDelegate(NnApiDelegate());
+  }
+
   // Modify delegate with function.
   if (apply_delegate_fn_) {
     apply_delegate_fn_(interpreter_.get());
@@ -140,6 +159,11 @@ void SingleOpModel::BuildInterpreter(std::vector<std::vector<int>> input_shapes,
 }
 
 void SingleOpModel::Invoke() { CHECK(interpreter_->Invoke() == kTfLiteOk); }
+
+// static
+void SingleOpModel::SetForceUseNnapi(bool use_nnapi) {
+  force_use_nnapi = use_nnapi;
+}
 
 int32_t SingleOpModel::GetTensorSize(int index) const {
   TfLiteTensor* t = interpreter_->tensor(index);
