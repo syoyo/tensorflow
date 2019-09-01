@@ -168,7 +168,7 @@ set(TENSORFLOW_LITE_SOURCES
 
 IF (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT EMSCRIPTEN)
   # Assume C++ sources
-  set_source_files_properties(${TENSORFLOW_LITE_SOURCES} PROPERTIES COMPILE_FLAGS "-Wno-extern-c-compat")
+  set_source_files_properties(${TENSORFLOW_LITE_SOURCES} PROPERTIES COMPILE_FLAGS "-Wno-extern-c-compat -Wno-visibility")
 ENDIF ()
 
 
